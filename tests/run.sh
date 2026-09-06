@@ -122,9 +122,28 @@ run_hooks() {
 # ---------------------------------------------------------------------------
 # Fixture matrix. Each fixture directory is a sysroot; expected.decisions is
 # the set of key=value decision records that must appear.
+# A host without Omarchy installed has no omarchy-* commands, so the wrapper
+# takes its "not found on PATH" branch and the seeding decisions are never
+# exercised. That is what made this pass for the wrong reason on the
+# maintainers' Omarchy box and fail on a pristine CachyOS guest. Put inert
+# stubs first on PATH: --dry-run only looks them up, it never executes them
+# (and they exit 97 loudly if that ever stops being true).
+omarchy_stubs() {
+    local dir="$WORK/omarchy-stubs" b
+    if [[ ! -d $dir ]]; then
+        mkdir -p "$dir"
+        for b in omarchy-reinstall-configs omarchy-provision-user omarchy-refresh-limine; do
+            printf '#!/bin/sh\necho "test stub: %s must not execute under --dry-run" >&2\nexit 97\n' "$b" >"$dir/$b"
+            chmod +x "$dir/$b"
+        done
+    fi
+    printf '%s' "$dir"
+}
+
 dry_run_fixture() { # FIXTURE OUT DEC [extra args...]
     local fixture="$1" out="$2" dec="$3"; shift 3
     : >"$dec"
+    PATH="$(omarchy_stubs):$PATH" \
     OMOCACHY_SYSROOT="$FIXTURES/$fixture" \
     OMOCACHY_DECISIONS_FILE="$dec" \
     OMOCACHY_LOG="$WORK/$fixture.log" \
@@ -196,7 +215,7 @@ run_purity() {
     local shim="$WORK/shim" log="$WORK/shim.log" b
     mkdir -p "$shim"
     : >"$log"
-    for b in sudo pacman pacman-key cp mv rm systemctl mkinitcpio limine-mkinitcpio limine-update \
+    for b in sudo pacman pacman-key cp mv rm systemctl mkinitcpio limine-mkinitcpio limine-update ufw ufw-docker updatedb \
              omarchy-apply-system omarchy-reinstall-configs omarchy-provision-user omarchy-refresh-limine; do
         printf '#!/bin/sh\necho "VIOLATION: %s $*" >>"%s"\nexit 97\n' "$b" "$log" >"$shim/$b"
         chmod +x "$shim/$b"

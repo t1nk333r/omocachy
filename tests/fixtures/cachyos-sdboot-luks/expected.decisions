@@ -12,3 +12,5 @@ initramfs_rebuild=/usr/bin/mkinitcpio -P
 boot_hook_policy=hookdir-override
 refresh_limine=skipped-not-limine
 limine_default_block=not-limine
+ufw_ssh=no-sshd
+omarchy_path_env=written

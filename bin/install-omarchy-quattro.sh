@@ -275,14 +275,16 @@ svc_enabled() {
     systemctl is-enabled --quiet "$1" 2>/dev/null
 }
 
-# CachyOS detection: prefer the release file, fall back to the presence of a
-# cachyos repo stanza in pacman.conf. Neither survives an omarchy-settings
-# install by itself (it rewrites /etc/os-release to ID=omarchy), which is why
-# /etc/os-release is deliberately not consulted here.
+# CachyOS detection. The load-bearing signal is a [cachyos*] repo stanza in
+# pacman.conf: an installed CachyOS 260809 has NO /etc/cachyos-release at all
+# (unowned by any package, `pacman -F` finds nothing shipping it — the file
+# exists only on the live ISO), verified on a pristine guest. The release file
+# is kept as a secondary hint for hosts that do have one. /etc/os-release is
+# deliberately not consulted: omarchy-settings rewrites it to ID=omarchy.
 IS_CACHYOS=false
-if [[ -f $(host_path /etc/cachyos-release) ]]; then
+if grep -qE '^\[cachyos' "$(host_path /etc/pacman.conf)" 2>/dev/null; then
     IS_CACHYOS=true
-elif grep -qE '^\[cachyos' "$(host_path /etc/pacman.conf)" 2>/dev/null; then
+elif [[ -f $(host_path /etc/cachyos-release) ]]; then
     IS_CACHYOS=true
 fi
 
@@ -491,6 +493,68 @@ OMARCHY_FAILLOCK_SRC=/usr/share/omarchy/etc-overrides/security-faillock.conf
 # hooks (or a later HookDir) can override it and why pacman -Qkk stays clean.
 UPDATE_GUARD_HOOK=/usr/share/libalpm/hooks/00-omarchy-update-guard.hook
 OMOCACHY_HOOK_DIR=/etc/pacman.d/hooks-omocachy
+OMARCHY_ISO_CLOSURE=(
+    cups avahi docker power-profiles-daemon kernel-modules-hook
+    ufw ufw-docker bluez bluez-utils plocate
+)
+APPLY_REQUIREMENTS=(
+    "unit:cups.service=cups"
+    "unit:avahi-daemon.service=avahi"
+    "unit:linux-modules-cleanup.service=kernel-modules-hook"
+    "unit:docker.socket=docker"
+    "unit:power-profiles-daemon.service=power-profiles-daemon"
+    "unit:sddm.service=sddm"
+    "unit:NetworkManager.service=networkmanager"
+    "unit:ufw.service=ufw"
+    "unit:bluetooth.service=bluez"
+    "cmd:ufw=ufw"
+    "cmd:ufw-docker=ufw-docker"
+    "cmd:updatedb=plocate"
+)
+
+unit_exists() {
+    systemctl list-unit-files --no-legend "$1" 2>/dev/null | grep -q .
+}
+
+check_apply_requirements() {
+    local req kind name pkg missing=()
+    for req in "${APPLY_REQUIREMENTS[@]}"; do
+        kind="${req%%:*}"; name="${req#*:}"; pkg="${name#*=}"; name="${name%%=*}"
+        case "$kind" in
+            unit) unit_exists "$name" || missing+=("$name (package: $pkg)") ;;
+            cmd)  command -v "$name" &>/dev/null || missing+=("$name (package: $pkg)") ;;
+        esac
+    done
+    if ((${#missing[@]})); then
+        printf 'Missing apply-system prerequisite: %s\n' "${missing[@]}" >&2
+        return 1
+    fi
+    return 0
+}
+ssh_ports() {
+    local f ports=()
+    shopt -s nullglob
+    for f in "$(host_path /etc/ssh/sshd_config)" "$(host_path /etc/ssh/sshd_config.d)"/*.conf; do
+        [[ -r $f ]] || continue
+        while read -r p; do
+            [[ -n $p ]] && ports+=("$p")
+        done < <(grep -iE '^[[:space:]]*Port[[:space:]]+[0-9]+' "$f" | awk '{print $2}')
+    done
+    shopt -u nullglob
+    ((${#ports[@]})) || ports=(22)
+    printf '%s\n' "${ports[@]}" | sort -u
+}
+
+SSHD_PRESENT=false
+if svc_enabled sshd.service || svc_enabled sshd.socket; then
+    SSHD_PRESENT=true
+elif [[ -n $SYSROOT ]] && pkg_installed openssh && [[ -f $(host_path /etc/ssh/sshd_config) ]]; then
+    # No service manager to ask under a sysroot: an installed openssh with a
+    # config is the closest honest answer.
+    SSHD_PRESENT=true
+fi
+
+
 PACMAN_HOOK_DIR=/etc/pacman.d/hooks
 SNAPPER_BACKUP=""
 SNAPPER_CONFD_BACKUP=""
@@ -645,6 +709,56 @@ check_update_guard() {
 check_cli() {
     command -v omarchy &>/dev/null
 }
+check_iso_closure() {
+    # The nine (plus avahi) packages apply-system needs but omarchy does not
+    # depend on. A missing one here means the next `omarchy update` -- or the
+    # next apply -- aborts the way the CachyOS guest did.
+    local p missing=()
+    for p in "${OMARCHY_ISO_CLOSURE[@]}"; do
+        pkg_installed "$p" || missing+=("$p")
+    done
+    ((${#missing[@]} == 0)) || { echo "      missing: ${missing[*]}" >&2; return 1; }
+}
+check_apply_units() {
+    check_apply_requirements 2>/dev/null
+}
+check_ufw_ssh() {
+    # Only meaningful where an sshd is enabled and ufw exists.
+    command -v ufw &>/dev/null || return 0
+    $SSHD_PRESENT || return 0
+    local status port
+    if ! status="$(sudo -n ufw status 2>/dev/null)"; then
+        echo "      (cannot read 'ufw status' without a password; not treated as a failure)"
+        return 0
+    fi
+    for port in $(ssh_ports); do
+        grep -qE "^${port}/tcp[[:space:]]+ALLOW" <<<"$status" || return 1
+    done
+}
+check_omarchy_path_env() {
+    # Either dev-link owns it, or /etc/environment carries it for every shell.
+    [[ -f /etc/omarchy.conf ]] || grep -qE '^\s*OMARCHY_PATH=' /etc/environment 2>/dev/null
+}
+check_limine_cmdline_args() {
+    # On a LUKS Limine host, omarchy-settings' drop-in appends
+    # `initramfs_async=0` with +=; its upstream comment says an encrypted boot
+    # otherwise falls back to an unthemed text LUKS prompt. A plain
+    # KERNEL_CMDLINE[default]= anywhere later (/etc/default/limine loads last)
+    # silently replaces it, so check the GENERATED entries, not the inputs.
+    [[ $BOOTLOADER == "limine" ]] || return 0
+    $LUKS_DETECTED || return 0
+    pkg_installed omarchy-settings || return 0
+    local generated
+    if ! generated="$(sudo -n cat /boot/limine.conf 2>/dev/null)"; then
+        echo "      (/boot is not readable without a password; not treated as a failure)"
+        return 0
+    fi
+    if grep -q 'initramfs_async=0' <<<"$generated"; then
+        return 0
+    fi
+    echo "      /boot/limine.conf has no initramfs_async=0: something assigned KERNEL_CMDLINE with '=' and dropped omarchy-settings' += additions. Expect an unthemed text LUKS prompt." >&2
+    return 1
+}
 
 run_assertion_suite() {
     step "Assertion suite"
@@ -661,6 +775,11 @@ run_assertion_suite() {
     assert "/etc/snapper/configs/root matches the pre-install backup" check_snapper
     assert "the omarchy update guard hook is installed (direct 'pacman -Syu' will abort from here on)" check_update_guard
     assert "the v4 CLI entrypoint (omarchy) is present" check_cli
+    assert "the ISO package closure apply-system needs is installed (${OMARCHY_ISO_CLOSURE[*]})" check_iso_closure
+    assert "every unit and command the apply stages call exists" check_apply_units
+    assert "ssh is allowed through ufw where an sshd is enabled (Omarchy's firewall.sh denies all incoming)" check_ufw_ssh
+    assert "OMARCHY_PATH is exported outside \$HOME (/etc/environment), so 'omarchy update' works on a --skip-user-configs host" check_omarchy_path_env
+    assert "the generated Limine entries keep omarchy-settings' initramfs_async=0 on a LUKS host (nothing replaced KERNEL_CMDLINE with '=')" check_limine_cmdline_args
 
     if $ASSERT_FAILED; then
         echo "" >&2
@@ -975,12 +1094,39 @@ if [[ $BOOTLOADER == "limine" ]]; then
             printf '# override the omarchy-settings drop-ins in /etc/limine-entry-tool.d/omarchy-*.conf\n'
             printf '# (TARGET_OS_NAME="Omarchy", ENABLE_UKI=yes, BOOT_ORDER without *lts).\n'
             printf '# Restore path: delete this block.\n'
+            printf '#\n'
+            printf '# If you ever add a KERNEL_CMDLINE line here, it MUST use += and not =.\n'
+            printf '# This file loads last, and a plain assignment REPLACES what the\n'
+            printf '# omarchy-settings drop-in appends with += -- including initramfs_async=0,\n'
+            printf '# which is what keeps an encrypted boot on the themed Plymouth LUKS prompt\n'
+            printf '# instead of dropping to an unthemed text one, and the splash arguments.\n'
+            printf '#   KERNEL_CMDLINE[default]+=" your args here"\n'
             printf '%s# <<< omocachy <<<\n' "$limine_block"
         } | append_root_file "$LIMINE_DEFAULT"
     else
         echo "$LIMINE_DEFAULT already sets TARGET_OS_NAME, ENABLE_UKI and BOOT_ORDER; leaving it alone."
     fi
     decide limine_default_block "$(printf '%s' "$limine_block" | tr '\n' ';')"
+
+    # /etc/default/limine loading last cuts both ways. omarchy-settings'
+    # drop-in APPENDS its kernel arguments
+    # (`KERNEL_CMDLINE[default]+=" quiet splash loglevel=0 ... initramfs_async=0"`),
+    # so a plain `KERNEL_CMDLINE[default]=` in /etc/default/limine silently
+    # replaces them: the regenerated entries lose Plymouth's splash arguments
+    # and the initramfs_async=0 workaround whose own comment says an encrypted
+    # boot otherwise falls back to an unthemed text LUKS prompt. Observed on
+    # the CachyOS guest. Not auto-fixed: rewriting someone's kernel command
+    # line is exactly the class of change that does not get a second try.
+    if grep -qE '^\s*KERNEL_CMDLINE\[[^]]*\]\s*=' "$(host_path "$LIMINE_DEFAULT")" 2>/dev/null; then
+        echo "Warning: $LIMINE_DEFAULT assigns KERNEL_CMDLINE with '=', and it loads after omarchy-settings' drop-in, which uses '+='." >&2
+        echo "         Omarchy's own arguments (quiet splash loglevel=0 ... initramfs_async=0) will be dropped from regenerated entries." >&2
+        echo "         Change that line to '+=' or add those arguments yourself; initramfs_async=0 is what keeps the LUKS prompt themed." >&2
+        decide limine_cmdline_style "assign-overrides-omarchy"
+    elif grep -qE '^\s*KERNEL_CMDLINE\[[^]]*\]\s*\+=' "$(host_path "$LIMINE_DEFAULT")" 2>/dev/null; then
+        decide limine_cmdline_style "append"
+    else
+        decide limine_cmdline_style "unset"
+    fi
 else
     decide limine_default_block "not-limine"
 fi
@@ -996,13 +1142,85 @@ fi
 
 # ---------------------------------------------------------------------------
 # Install packages
+#
+# Including the ISO package closure. omarchy-apply-system's stages enable and
+# call things the Omarchy ISO has already installed but the `omarchy` package
+# does not depend on. On a CachyOS host each one is a hard abort, verified on
+# a real CachyOS 260809 guest (2026-09-07), in this order — one per re-run:
+#   install/config/enable-services.sh   "Unit cups.service does not exist"        -> cups
+#                                       (same list: docker.socket, power-profiles-daemon.service)
+#   install/config/enable-services.sh   "Unit linux-modules-cleanup.service does not exist"
+#                                                                                 -> kernel-modules-hook
+#   install/config/firewall.sh          "ufw: command not found" (exit 127)       -> ufw
+#   install/config/firewall.sh          empty `command -v ufw-docker`             -> ufw-docker
+#   install/hardware/bluetooth.sh       "Unit bluetooth.service does not exist"   -> bluez, bluez-utils
+#   install/post-install/localdb.sh     "updatedb: command not found" (exit 127)  -> plocate
+# avahi-daemon.service is enabled by the same script; it happened to be present
+# on the pristine guest, and is listed here so it cannot be the next surprise.
+# ufw-docker lives in [omarchy], which is why this cannot run before the repo
+# stanza is appended — it goes in the same transaction as the omarchy packages.
 # ---------------------------------------------------------------------------
 
 step "Installing omarchy packages"
 # On a re-apply the omarchy package's 00-omarchy-update-guard.hook is already
 # installed (PreTransaction, AbortOnFail); omarchy-update-pacman-guard:8 lets a
 # direct -Syu through only with OMARCHY_ALLOW_DIRECT_PACMAN=1.
-run_root env OMARCHY_ALLOW_DIRECT_PACMAN=1 pacman -Syu --needed --noconfirm omarchy-settings omarchy omarchy-nvim
+echo "Also installing the ISO package closure: ${OMARCHY_ISO_CLOSURE[*]}"
+run_root env OMARCHY_ALLOW_DIRECT_PACMAN=1 pacman -Syu --needed --noconfirm \
+    omarchy-settings omarchy omarchy-nvim "${OMARCHY_ISO_CLOSURE[@]}"
+decide iso_closure "${OMARCHY_ISO_CLOSURE[*]}"
+
+# ---------------------------------------------------------------------------
+# Pre-apply gate
+#
+# Prove the units and commands the apply stages call exist, and say which
+# package is missing if one does not, instead of letting omarchy-apply-system
+# die halfway through with "Unit foo.service does not exist".
+# ---------------------------------------------------------------------------
+
+
+step "Pre-apply prerequisite gate"
+if $DRY_RUN; then
+    echo "DRYRUN: verify each unit/command omarchy-apply-system calls exists:"
+    printf '    | %s\n' "${APPLY_REQUIREMENTS[@]}"
+else
+    if check_apply_requirements; then
+        echo "All units and commands the apply stages call are present."
+    else
+        echo "Error: omarchy-apply-system would abort on the prerequisites listed above." >&2
+        echo "Install the named packages and re-run; do not run apply-system without them." >&2
+        exit 1
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# ssh survival
+#
+# install/config/firewall.sh does `ufw default deny incoming`, flips
+# ENABLED=yes in /etc/ufw/ufw.conf and enables the unit — with NO ssh
+# allowance anywhere. The rules load into the kernel as they are written, so
+# an ssh session dies mid-apply, before any reboot (observed on the CachyOS
+# guest; recovery needed the hypervisor console). Every ufw rule added before
+# apply-system persists in /etc/ufw/user.rules, so the allowance is added
+# here, ahead of it. Nothing is opened on a machine with no sshd.
+# ---------------------------------------------------------------------------
+
+step "Firewall (ssh survival)"
+if $SSHD_PRESENT; then
+    SSH_PORT_LIST="$(ssh_ports | tr '\n' ' ')"
+    echo "!! An sshd is enabled on this machine and Omarchy's install/config/firewall.sh"
+    echo "!! turns ufw on with 'default deny incoming' and no ssh rule. Allowing ssh now,"
+    echo "!! before apply-system runs, so this run cannot lock you out: $SSH_PORT_LIST"
+    for ssh_port in $SSH_PORT_LIST; do
+        run_root ufw allow "$ssh_port/tcp"
+    done
+    decide ufw_ssh "allowed:$(echo "$SSH_PORT_LIST" | tr -s ' ' | sed 's/ $//' | tr ' ' ',')"
+else
+    echo "No sshd is enabled here, so nothing was opened. Note that Omarchy's"
+    echo "install/config/firewall.sh will still enable ufw with 'default deny incoming':"
+    echo "if you enable sshd later, run 'sudo ufw allow 22/tcp' BEFORE you rely on it."
+    decide ufw_ssh "no-sshd"
+fi
 
 # ---------------------------------------------------------------------------
 # Apply
@@ -1055,6 +1273,43 @@ step "Post-apply /etc reconciliation"
 [[ -n $NSSWITCH_BACKUP ]] && run_root cp -a "$NSSWITCH_BACKUP" /etc/nsswitch.conf
 # faillock.conf: Omarchy's version is accepted (see the backup comment above).
 echo "Leaving Omarchy's $FAILLOCK_CONF in place (its PAM edits match it).${FAILLOCK_BACKUP:+ Backup: $FAILLOCK_BACKUP}"
+
+# OMARCHY_PATH for every shell, not just the ones /etc/skel seeds.
+#
+# `omarchy update` calls omarchy-update-dev, whose line 7
+# (`[[ $OMARCHY_PATH != "/usr/share/omarchy" ]] || exit 0`) runs under
+# `set -euo pipefail`: with the variable unset it dies with
+# "OMARCHY_PATH: unbound variable" before the update starts. The only thing
+# that exports it is /usr/share/omarchy/default/bash/env-bootstrap, sourced
+# by the package's own /etc/profile.d/omarchy.sh (LOGIN shells only) and by
+# /etc/skel/.bashrc — which is exactly what --skip-user-configs does not
+# replay. Observed on the CachyOS guest: `omarchy update` from a non-login
+# shell, and `sudo omarchy update`, both die there.
+#
+# /etc/environment is read by pam_env at session setup, so it covers every
+# shell (fish included), ssh sessions and the graphical session, without
+# touching $HOME. It is only written when /etc/omarchy.conf is absent: with
+# omarchy-dev-link active that file names a different checkout, and
+# env-bootstrap (which runs later, in login shells) must stay authoritative.
+# Restore path: delete the delimited block from /etc/environment.
+if [[ -f $(host_path /etc/omarchy.conf) ]]; then
+    echo "/etc/omarchy.conf exists (omarchy-dev-link); leaving OMARCHY_PATH to env-bootstrap."
+    decide omarchy_path_env "dev-link-present"
+elif grep -qE '^\s*OMARCHY_PATH=' "$(host_path /etc/environment)" 2>/dev/null; then
+    echo "/etc/environment already sets OMARCHY_PATH; leaving it alone."
+    decide omarchy_path_env "already-set"
+else
+    {
+        printf '\n# >>> omocachy install-omarchy-quattro.sh >>>\n'
+        printf '# Read by pam_env, so every shell and session type gets it -- not just the\n'
+        printf '# login shells /etc/profile.d/omarchy.sh covers and the interactive shells\n'
+        printf '# /etc/skel/.bashrc covers. Without it `omarchy update` dies in\n'
+        printf '# omarchy-update-dev with "OMARCHY_PATH: unbound variable".\n'
+        printf 'OMARCHY_PATH=/usr/share/omarchy\n'
+        printf '# <<< omocachy <<<\n'
+    } | append_root_file /etc/environment
+    decide omarchy_path_env "written"
+fi
 # install/config/snapper.sh rewrites /etc/conf.d/snapper to SNAPPER_CONFIGS="root"
 # and disables snapper-timeline.timer; /etc/snapper/configs/root is restored
 # later, after the GPU step, together with its assertion.
@@ -1264,5 +1519,23 @@ echo "or set OMARCHY_ALLOW_DIRECT_PACMAN=1 in the environment of a direct pacman
 echo ""
 echo "After the first 'omarchy update', re-run this script with --verify-only: it re-checks"
 echo "that the CachyOS repos, os-release, HOOKS and boot-hook policy all survived the update."
+echo ""
+echo "Three things a real CachyOS run turned up, worth knowing before you reboot:"
+if $SSHD_PRESENT; then
+    echo "  * ufw is now enabled with 'default deny incoming'. This script allowed your sshd"
+    echo "    port(s) ($(ssh_ports | tr '\n' ' ')) beforehand, so remote access survives. Anything else you"
+    echo "    expose (e.g. Samba, a dev server) needs its own 'sudo ufw allow ...'."
+else
+    echo "  * ufw is now enabled with 'default deny incoming' and NOTHING is allowed in."
+    echo "    If you enable sshd later, run 'sudo ufw allow 22/tcp' before you depend on it."
+fi
+echo "  * Run 'omarchy update' as your user, not with sudo: root's environment has no"
+echo "    OMARCHY_PATH either, and a root-created /tmp/omarchy-update.log then blocks your"
+echo "    next attempt (delete it if that happens). OMARCHY_PATH is now set in"
+echo "    /etc/environment, which takes effect at your next login -- for this session use"
+echo "    'OMARCHY_PATH=/usr/share/omarchy omarchy update'."
+echo "  * A migration ('Repair the pre-suspend lock monitor') reports that"
+echo "    omarchy-sleep-lock.service is not loaded and says it will retry. That is expected"
+echo "    on a layered install and is not a failure; nothing else in the update is affected."
 echo ""
 echo "Log: $LOG_FILE"

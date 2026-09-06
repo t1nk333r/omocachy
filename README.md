@@ -233,6 +233,66 @@ command line asks for (`cryptdevice=` vs `rd.luks.*`), the wrapper stops
 before writing anything and tells you what disagrees. Every possible merge in
 those cases produces an initramfs that cannot unlock the root volume.
 
+**The ISO package closure.** `omarchy-apply-system` enables and calls things
+the Omarchy *ISO* has already installed but the `omarchy` *package* does not
+depend on. On a bare CachyOS host each one is a hard abort partway through the
+apply — verified on a real CachyOS 260809 guest, which failed five times in a
+row, once per missing piece: `cups.service`, `linux-modules-cleanup.service`
+(`kernel-modules-hook`), `ufw: command not found`, an empty `command -v
+ufw-docker`, `bluetooth.service`, and `updatedb: command not found`. The
+wrapper therefore installs `cups avahi docker power-profiles-daemon
+kernel-modules-hook ufw ufw-docker bluez bluez-utils plocate` in the same
+transaction as the omarchy packages (`ufw-docker` lives in `[omarchy]`, so it
+cannot be installed before the repo stanza lands), and then *gates* the apply:
+every unit and command the apply stages call must exist, or the wrapper stops
+and names the missing package instead of letting `omarchy-apply-system` die
+halfway.
+
+**ssh survives the install.** Omarchy's `install/config/firewall.sh` runs
+`ufw default deny incoming`, flips `ENABLED=yes` and enables the unit, with
+**no ssh allowance at all**. The rules load into the running kernel as they
+are written, so on the guest an ssh session died mid-apply — before any
+reboot, recovery needed the hypervisor console. Anyone layering Omarchy onto a
+remote CachyOS box would lose the box. So, before the apply, the wrapper reads
+the port(s) from `/etc/ssh/sshd_config` *and* `/etc/ssh/sshd_config.d/*.conf`
+and runs `ufw allow <port>/tcp` for each, printing a loud line saying it did —
+but only when an sshd is actually enabled. With no sshd it opens nothing and
+says so, warning that ufw will still come up deny-incoming. Everything else
+you expose still needs its own `ufw allow`.
+
+**`omarchy update` works on a `--skip-user-configs` host.** `omarchy update`
+calls `omarchy-update-dev`, whose line 7 dereferences `$OMARCHY_PATH` under
+`set -euo pipefail`. The only thing that exports it is
+`/usr/share/omarchy/default/bash/env-bootstrap`, sourced from the package's
+`/etc/profile.d/omarchy.sh` (**login shells only**) and from
+`/etc/skel/.bashrc` — the file `--skip-user-configs` deliberately does not
+replay. On the guest, `omarchy update` from a non-login shell died with
+`OMARCHY_PATH: unbound variable`, and so did `sudo omarchy update` (root's
+environment has no `OMARCHY_PATH` either — and the root-owned
+`/tmp/omarchy-update.log` it leaves behind then blocks the user's next
+attempt with a permission error; delete it if that happens). The wrapper now
+adds `OMARCHY_PATH=/usr/share/omarchy` to `/etc/environment`, which `pam_env`
+applies to every shell and session type without touching `$HOME` — skipped if
+`/etc/omarchy.conf` exists, because `omarchy-dev-link` owns the variable
+then. It takes effect at your next login; for the current session use
+`OMARCHY_PATH=/usr/share/omarchy omarchy update`. Run the update **as your
+user**, not with `sudo`.
+
+One known-benign noise during that update: the migration "Repair the
+pre-suspend lock monitor" reports `omarchy-sleep-lock.service not loaded` and
+says it will retry. That is expected on a layered install — the guest showed
+nothing else affected (`os-release` still `cachyos`, `[cachyos]` still above
+`[core]`, HOOKS unchanged, `pacman -Qkk` clean, all assertions green).
+
+**A sharp edge in `/etc/default/limine` the wrapper only warns about.** That
+file loading last is what makes it the right override point — and also means a
+plain `KERNEL_CMDLINE[default]=` there *replaces* the arguments
+`omarchy-settings` appends with `+=` (`quiet splash loglevel=0 …
+initramfs_async=0`). On the guest, that silently dropped Plymouth's splash
+arguments and `initramfs_async=0`, whose own upstream comment says an
+encrypted boot otherwise falls back to an unthemed text LUKS prompt. The
+wrapper detects the `=` form and warns, with the fix (`+=`), but does not
+rewrite your kernel command line: that is not a change worth guessing at.
 **Verification.** After the apply, a hard-failing assertion suite checks:
 `[omarchy]` and (on CachyOS) the `[cachyos*]` repos present; `/etc/os-release`
 still `ID=cachyos`; `/etc/security/faillock.conf` is Omarchy's (accepted

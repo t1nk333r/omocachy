@@ -16,3 +16,5 @@ boot_hook_policy=limine-native
 refresh_limine=yes-restore-cachyos-conf
 limine_default_block=ENABLE_UKI=no;BOOT_ORDER="*, *fallback, Snapshots";
 skel_hypr_files=true
+limine_cmdline_style=unset
+omarchy_path_env=written

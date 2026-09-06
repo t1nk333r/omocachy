@@ -12,3 +12,5 @@ boot_hook_policy=hookdir-override
 skel_hypr_files=false
 refresh_limine=skipped-not-limine
 limine_default_block=not-limine
+ufw_ssh=no-sshd
+omarchy_path_env=written
