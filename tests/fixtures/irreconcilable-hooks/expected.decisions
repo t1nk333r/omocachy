@@ -1,0 +1,4 @@
+# udev/encrypt HOOKS on a machine whose cmdline says rd.luks.uuid=. There is
+# no correct merge, so the wrapper must stop before writing anything.
+exit=1
+hooks_conflict=the captured HOOKS use the udev encryption hook but the kernel command line asks for the systemd one (rd.luks.*) — the running initramfs and /etc have already drifted apart, and any merge would guess which one is right

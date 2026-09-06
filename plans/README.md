@@ -37,7 +37,9 @@ re-verification steps; run them.
 
 | 014 | Quattro per-item debloat picker (`bin/debloat-quattro.sh`, MIT-derived from upstream) | P2 | M | 012 | DONE (sonnet, approved, landed at fc35e98; mock-verified incl. live package intersection; real-TUI run on a v4 machine = same release gate as 012) |
 
-| 015 | Reconcile the Quattro wrapper against installed Omarchy 4.0.2 (bootloader detection, transforming HOOKS drop-in, stock mkinitcpio hook + NoUpgrade instead of a no-op, os-release/nsswitch/snapper/iwd preservation + PostTransaction hook, `/etc/default/limine` block, `--skip-user-configs`/`--autologin`, SDDM remembered-user state, uwsm env.d for GPU env, update-guard) | P1 | M | 012 | DONE (this session; dry-run verified on the dev machine; **REAL CACHYOS VALIDATION STILL REQUIRED** — see plan file "Still unverified") |
+| 015 | Reconcile the Quattro wrapper against installed Omarchy 4.0.2 (bootloader detection, transforming HOOKS drop-in, os-release/nsswitch/snapper/iwd preservation + PostTransaction hook, `/etc/default/limine` block, `--skip-user-configs`/`--autologin`, SDDM remembered-user state, uwsm env.d for GPU env, update-guard) | P1 | M | 012 | DONE, then partly CORRECTED by 016 (its "stock mkinitcpio hook + NoUpgrade" boot-hook fix and its update-guard path were wrong; see 016) |
+
+| 016 | Independent verification of 015 + four corrections (pre-transaction `HookDir` boot-hook policy replacing the NoUpgrade edit, HOOKS refusal path, ESP-based bootloader detection, faillock/update-guard corrections, `--verify-only`, ERR trap + install log + failure scanner) and a CachyOS test seam (`OMOCACHY_SYSROOT`, `tests/run.sh`, fixture matrix) | P1 | L | 012, 015 | DONE (this session; 105 test assertions green; **REAL CACHYOS VALIDATION STILL REQUIRED** — the matrix proves branch selection, not that the result boots) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale)

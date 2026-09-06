@@ -90,17 +90,22 @@ root-equivalent; secrets in `.env`, unrecoverable, never commit or print):
 
 ## Release gates (the honest "not done" list)
 
-1. **Real CachyOS validation of the Quattro wrapper** — dry-run proved
-   the command plan and the rendered files, never the outcome. Wanted: one
-   GRUB+LUKS VM, one Limine+LUKS VM (systemd initramfs, `rd.luks.uuid=`),
+1. **Real CachyOS validation of the Quattro wrapper** — dry-run and the
+   fixture matrix (`tests/run.sh`, plan 016) prove the command plan, the
+   rendered files and the *branch selection* on CachyOS-shaped input. They do
+   not prove the resulting system boots. Wanted: one GRUB+LUKS VM, one
+   Limine+LUKS VM (systemd initramfs, `rd.luks.uuid=`), one systemd-boot VM,
    fresh CachyOS each; run once with `--skip-user-configs` (dotfiles-managed
    home) and once without. Specifically confirm: the transformed
-   `zz-cachyos-keep-hooks.conf` boots; `limine-snapper-sync` accepts
-   `TARGET_OS_NAME="CachyOS"`; `/etc/os-release` stays `ID=cachyos` across
-   an `omarchy-settings` upgrade (preserve hook); SDDM shows the remembered
-   user; `pacman -Qkk limine-mkinitcpio-hook` matches the assertion. The
-   dev machine (Omarchy ISO install, Limine+LUKS+AMD, udev initramfs) can
-   only exercise the re-apply path.
+   `zz-cachyos-keep-hooks.conf` boots; the extra `HookDir`
+   (`/etc/pacman.d/hooks-omocachy/`) really shadows
+   `limine-mkinitcpio-hook`'s `90-mkinitcpio-install.hook` in a live
+   transaction, and an initramfs rebuild still fires on a kernel upgrade;
+   `limine-snapper-sync` accepts `TARGET_OS_NAME="CachyOS"`;
+   `/etc/os-release` stays `ID=cachyos` across an `omarchy-settings` upgrade
+   (preserve hook); SDDM shows the remembered user; `--verify-only` is green
+   after the first `omarchy update`. The dev machine (Omarchy ISO install,
+   Limine+LUKS+AMD, udev initramfs) can only exercise the re-apply path.
 2. **Real interactive run of `bin/debloat-quattro.sh` on a v4 machine**
    (same VM gate) — enumeration/dry-run are mock-verified only.
 3. **Jenkins agent secret** (above) — then confirm a green build on push.
@@ -110,10 +115,13 @@ root-equivalent; secrets in `.env`, unrecoverable, never commit or print):
 ## Fast orientation for an agent
 
 Read in this order: this file → `plans/README.md` (status + discoveries
-index) → the specific plan file for whatever you're touching (015 = current
-wrapper behaviour with 4.0.2 evidence, 012 = original wrapper design, 011 =
-v4 strategy evidence, 007/008 = GPU evidence trail). Trust the plan files'
-quoted evidence over memory; the best upstream source is an *installed*
-Omarchy (`pacman -Ql omarchy omarchy-settings`, `/usr/share/omarchy/**`,
-`/var/lib/pacman/local/*/install`); re-probe `basecamp/omarchy` via git
-otherwise — it moves fast and the CDN lies.
+index) → the specific plan file for whatever you're touching (016 = current
+wrapper behaviour, the audit of 015 and the test seam; 015 = the 4.0.2
+evidence trail, with two mechanisms since corrected by 016; 012 = original
+wrapper design; 011 = v4 strategy evidence; 007/008 = GPU evidence trail).
+Before changing `bin/install-omarchy-quattro.sh`, run `tests/run.sh` and
+re-run it after: the fixture matrix is what catches a branch flipping.
+Trust the plan files' quoted evidence over memory; the best upstream source
+is an *installed* Omarchy (`pacman -Ql omarchy omarchy-settings`,
+`/usr/share/omarchy/**`, `/var/lib/pacman/local/*/install`); re-probe
+`basecamp/omarchy` via git otherwise — it moves fast and the CDN lies.

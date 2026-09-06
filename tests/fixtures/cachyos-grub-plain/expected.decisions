@@ -1,0 +1,14 @@
+# CachyOS + GRUB, no encryption, udev HOOKS with a `usr` HOOKS+= drop-in,
+# and a stale /etc/sddm.conf that must be removed.
+exit=0
+is_cachyos=true
+bootloader=grub
+luks=false
+cmdline_crypt=none
+captured_flavour=udev
+merged_hooks=base udev plymouth keyboard autodetect microcode modconf kms keymap consolefont block encrypt usr filesystems fsck btrfs-overlayfs
+initramfs_rebuild=/usr/bin/mkinitcpio -P
+boot_hook_policy=hookdir-override
+skel_hypr_files=false
+refresh_limine=skipped-not-limine
+limine_default_block=not-limine

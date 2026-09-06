@@ -81,17 +81,32 @@ prefix — and the full content of every file it would write — instead of
 executing it, so you can review the plan before committing. `--yes` skips
 the confirmation prompt (safe to combine with `--dry-run`).
 
-**Two more flags:**
+**Three more flags:**
 
-- `--skip-user-configs` keeps the wrapper out of `$HOME` entirely: no
-  `/etc/skel` replay (`omarchy-reinstall-configs`), no
-  `omarchy-provision-user`, no fish `conf.d` file, and the GPU scripts print
+- `--skip-user-configs` keeps the wrapper out of `$HOME` entirely. It skips,
+  by name:
+  - the `/etc/skel` replay — `omarchy-reinstall-configs`, which is
+    `cp -af /etc/skel/. ~/` and would overwrite a dotfiles checkout;
+  - `omarchy-refresh-limine`, which `omarchy-reinstall-configs` calls and
+    which replaces `/boot/limine.conf` with Omarchy's branded copy;
+  - `omarchy-provision-user`;
+
+  and it also suppresses the fish `conf.d` file, while the GPU scripts print
   their session-environment lines instead of writing
   `~/.config/uwsm/env.d/50-omocachy-gpu`. Use it when a dotfiles tool owns
   your home; deploy your dotfiles afterwards and run `omarchy-provision-user`
-  yourself if you want Omarchy's user finalization.
+  yourself if you want Omarchy's user finalization. Nothing else implies this
+  flag: without it, all three steps run, and the replay is preceded by a
+  timestamped backup of every `$HOME` entry `/etc/skel` would shadow.
+
+  (Independently of this flag, `omarchy-refresh-limine` is also gated on
+  Limine actually being your bootloader. On a GRUB or systemd-boot machine it
+  is shadowed by a no-op on `PATH` for the duration of the replay — its
+  `sudo mv /boot/limine.conf /boot/limine.conf.bak` would otherwise fail and
+  abort the whole seeding step.)
 - `--autologin` writes `/etc/sddm.conf.d/autologin.conf` for your user
   (Omarchy's ISO default). Off by default.
+- `--verify-only` runs just the read-only assertion suite and exits.
 
 **What the wrapper does:**
 
@@ -174,41 +189,110 @@ verified against an installed Omarchy 4.0.2 (evidence in
 
 **Bootloader handling.** The `omarchy` package hard-depends on `limine`,
 `limine-mkinitcpio-hook`, and `limine-snapper-sync` — they arrive via pacman
-regardless of your actual bootloader, which is also why the wrapper detects
-the bootloader from the firmware (`bootctl status`) and loader configs rather
-than from installed packages. If Limine is your active bootloader, Omarchy's
-Limine integration is left fully active. If it is not (GRUB, systemd-boot),
-the wrapper disables `limine-snapper-sync.service`, replaces
-`limine-mkinitcpio-hook`'s `/etc/pacman.d/hooks/90-mkinitcpio-install.hook`
-with a copy of mkinitcpio's stock hook (protected by a `NoUpgrade` line in
-`/etc/pacman.conf`, so upgrades leave a `.pacnew`), and overrides its three
-`/usr/share/libalpm/hooks/*limine*` hooks with same-named no-ops in
-`/etc/pacman.d/hooks/`. Initramfs regeneration on kernel and driver upgrades
-keeps working; nothing Limine-specific runs.
+regardless of your actual bootloader. That is exactly why the wrapper never
+detects the bootloader from installed packages: on any Omarchy host
+`pacman -Qq limine` succeeds no matter what boots the machine. Detection is,
+in order: `bootctl`'s `LoaderInfo` EFI variable, the contents of the ESP
+(`EFI/limine/*.efi`, `EFI/systemd/systemd-boot*.efi`, `EFI/*/grubx64.efi`,
+the loader configs), readable `/boot` loader configs, and only as a last
+resort a package probe — which is warned about and never trusted for
+`limine`.
+
+If Limine is your active bootloader, Omarchy's Limine integration is left
+fully active. If it is not (GRUB, systemd-boot), the wrapper — **before** the
+pacman transaction, because `limine-mkinitcpio-hook`'s own hooks fire inside
+it and `80-limine-efi-deploy.hook` would run `limine-install` against your
+ESP — registers a third pacman hook directory:
+
+```
+HookDir = /etc/pacman.d/hooks/
+HookDir = /etc/pacman.d/hooks-omocachy/
+```
+
+`pacman.conf(5)`: hooks in later directories take precedence over hooks in
+earlier ones, and naming any `HookDir` replaces the `/etc/pacman.d/hooks`
+default, so both lines are written. `/etc/pacman.d/hooks-omocachy/` then
+holds a copy of **mkinitcpio's own** `90-mkinitcpio-install.hook` (so kernel
+and driver upgrades keep regenerating the initramfs — the Limine variant that
+`limine-mkinitcpio-hook` installs into `/etc/pacman.d/hooks/` is shadowed,
+not deleted) plus inert overrides for the three
+`/usr/share/libalpm/hooks/*limine*` hooks. `limine-snapper-sync.service` is
+disabled.
+
+No packaged file is edited anywhere in this path: `pacman -Qkk
+limine-mkinitcpio-hook` stays clean, and there is nothing for a package
+upgrade to silently revert. **Restore path:** delete
+`/etc/pacman.d/hooks-omocachy/` and the two `HookDir` lines. There is no
+`/usr/bin/true` no-op over the initramfs hook and no `NoUpgrade` entry —
+both were removed as unsafe (see `plans/016-*.md`).
+
+**Refusal, not guesswork, on the HOOKS array.** If your captured HOOKS mix
+the two initramfs flavours (`systemd` + `udev`, or `encrypt` + `sd-encrypt`),
+or carry an encryption hook of a different flavour from what the kernel
+command line asks for (`cryptdevice=` vs `rd.luks.*`), the wrapper stops
+before writing anything and tells you what disagrees. Every possible merge in
+those cases produces an initramfs that cannot unlock the root volume.
 
 **Verification.** After the apply, a hard-failing assertion suite checks:
-`[omarchy]` and (on CachyOS) the `[cachyos*]` repos present;
-`/etc/os-release` still `ID=cachyos`; the HOOKS drop-in exists and the
-*effective* HOOKS keep your LUKS unlock flavour, `plymouth` and an overlayfs
-hook; `pacman -Qkk limine-mkinitcpio-hook` is clean (Limine) or reports only
-the `NoUpgrade`-managed hook; `limine-snapper-sync` disabled on non-Limine
-machines; `/etc/default/limine` carries `TARGET_OS_NAME` on a CachyOS Limine
-host; `sddm` and `NetworkManager` enabled; no `/etc/sddm.conf`; the snapper
-config matches its backup; and the `omarchy` CLI exists.
+`[omarchy]` and (on CachyOS) the `[cachyos*]` repos present; `/etc/os-release`
+still `ID=cachyos`; `/etc/security/faillock.conf` is Omarchy's (accepted
+deliberately); the HOOKS drop-in exists and the *effective* HOOKS are
+bootable-shaped (encryption hook present and matching the cmdline flavour,
+`plymouth`, an overlayfs hook); `pacman -Qkk limine-mkinitcpio-hook` clean;
+the `HookDir` override in place on non-Limine machines; `limine-snapper-sync`
+disabled there; `/etc/default/limine` carrying the `ENABLE_UKI`/`BOOT_ORDER`
+(and, on CachyOS, `TARGET_OS_NAME`) overrides on a Limine host; `sddm` and
+`NetworkManager` enabled; no `/etc/sddm.conf`; the snapper config matching its
+backup; the update-guard hook installed; and the `omarchy` CLI present.
 
-**After the install: updates.** The `omarchy` package installs a
-`PreTransaction` pacman hook that aborts any direct `pacman -Syu` (and every
-tool that wraps one — `paru`, `yay`, `topgrade`, `cachyos-update`). Update
-with `omarchy update`, or set `OMARCHY_ALLOW_DIRECT_PACMAN=1` in the
-environment of the upgrade command. The wrapper prints this reminder when it
-finishes and uses the same variable for its own re-runs.
+Run that suite again at any time with `--verify-only`, which installs and
+changes nothing:
+
+```bash
+bin/install-omarchy-quattro.sh --verify-only     # e.g. after `omarchy update`
+```
+
+**After the install: updates.** The `omarchy` package installs
+`/usr/share/libalpm/hooks/00-omarchy-update-guard.hook`, a `PreTransaction`
+`AbortOnFail` hook that aborts **any** direct `pacman -Syu` — including the
+ones `paru`, `yay`, `topgrade` and `cachyos-update` run for you. This is the
+first thing a CachyOS user hits after the install. Update with `omarchy
+update`, or set `OMARCHY_ALLOW_DIRECT_PACMAN=1` in the environment of the
+upgrade command:
+
+```bash
+omarchy update                                    # the supported path
+OMARCHY_ALLOW_DIRECT_PACMAN=1 sudo pacman -Syu    # the escape hatch
+```
+
+The wrapper prints this reminder when it finishes and uses the same variable
+for its own re-runs. After your first `omarchy update`, run
+`--verify-only`: that is when a migration or an `omarchy-settings` upgrade
+would take the CachyOS repos, `os-release` or the boot hooks back out.
+
+**Every run is logged** to `~/.local/state/omocachy/install-<timestamp>.log`
+(override with `OMOCACHY_LOG`). On an unexpected abort the ERR trap names the
+step and scans that log for the failure patterns worth reading.
+
+**Testing without CachyOS.** `tests/run.sh` runs the whole suite on any
+Arch-based host and changes nothing: `bash -n` + `shellcheck`, the HOOKS
+merge against both initramfs flavours and its refusal paths, a dry run
+against each fixture sysroot in `tests/fixtures/` (CachyOS+Limine+LUKS,
+CachyOS+GRUB, CachyOS+systemd-boot-with-the-limine-package-installed, and
+this project's own Omarchy host as a control), and a dry-run purity check
+that puts failing stubs for `sudo`/`pacman`/`cp`/`mv`/`systemctl` first on
+`PATH` and proves none of them is executed. Fixtures work through
+`OMOCACHY_SYSROOT=<dir>`, which redirects every *read* of host state and
+requires `--dry-run`.
 
 **Status: not yet validated on a real CachyOS host.** Every guarantee above
 is grounded in the installed 4.0.2 package contents and exercised by
-`--dry-run` and a hook-transform harness, but the wrapper has so far only run
-for real on the maintainers' Omarchy-ISO machine (re-apply path). Treat the
-first CachyOS run as a test: take a snapshot, read the dry-run, keep a live
-USB handy.
+`--dry-run`, the fixture matrix and the merge tests, but the wrapper has so
+far only run for real on the maintainers' Omarchy-ISO machine (re-apply
+path). The fixture matrix proves the decision logic takes the intended branch
+on CachyOS-shaped input; it does not prove the resulting system boots. Treat
+the first CachyOS run as a test: take a snapshot, read the dry-run, keep a
+live USB handy.
 
 ## 4. How CachyOS/Omarchy Conflicts Are Resolved
 

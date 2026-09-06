@@ -1,0 +1,4 @@
+Removing stale /etc/sddm.conf
+HookDir = /etc/pacman.d/hooks-omocachy/
+Disabled by omocachy (non-limine bootloader)
+cp -f /usr/share/libalpm/hooks/90-mkinitcpio-install.hook /etc/pacman.d/hooks-omocachy/90-mkinitcpio-install.hook

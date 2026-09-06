@@ -1,0 +1,1 @@
+rd.luks.uuid=8a85fd67-0000-0000-0000-c2c0f8fcbba9 root=/dev/mapper/root rw quiet
