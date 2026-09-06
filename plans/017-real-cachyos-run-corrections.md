@@ -244,6 +244,40 @@ passed, the one FAIL being 2.3 above, and `tests/run.sh` ran 117/0 in the
 guest before the install — confirming the test-stub fix holds on a
 non-Omarchy host.
 
+### 2.4 After the reboot: the ufw fix is proven end to end
+
+ufw only becomes active at boot, so the enabled-not-started window (2.3) is
+not where the fix is tested. After `systemctl reboot` on the GRUB guest, ssh
+reconnected on the first attempt and `ufw status` reports **active**, `Default:
+deny (incoming)`, with `22/tcp ALLOW IN Anywhere` (and its v6 form) alongside
+Omarchy's own LocalSend and docker-DNS rules. `--verify-only` after the reboot:
+rc=0, **18 PASS / 0 FAIL**, the ufw assertion among them. A 20-second
+continuity poller recorded ssh-ok at every sample across the entire run
+(01:44:36 → 01:52:43); the only failure in the series is the deliberate
+reboot at 01:53:08. The serial console was never used.
+
+### 2.5 Bootloader detection under a root-only ESP
+
+Tested as an ordinary user, ESP file-state hash identical before and after
+(nothing written). `mount -o remount,umask=…` is a no-op on vfat, so this
+needed a real umount+mount:
+
+| ESP mode | `bootctl` | verdict | source |
+| --- | --- | --- | --- |
+| `drwxr-xr-x` | present | `grub` | `bootctl LoaderInfo: GRUB 2.14` |
+| `drwxr-xr-x` | hidden | `grub` | ESP contents (warns: "more than one bootloader … assuming grub") |
+| `drwx------` | present | `grub` | `bootctl LoaderInfo: GRUB 2.14` |
+| `drwx------` | hidden | `grub` | package probe, with its warning |
+
+Three things this settles: GRUB 2.14 **does** set the systemd `LoaderInfo` EFI
+variable, so tier 1 answers on a real GRUB machine before the ESP is read at
+all and the mount mode is irrelevant; the multi-loader collision branch fires
+for real here (because defect 2.1 had left a `/boot/limine.conf` behind) and
+correctly picks `grub` with a warning; and in the genuinely worst case —
+root-only ESP *and* no `bootctl` — it degrades to the package probe and still
+answers `grub`, because `limine` is never probed. A GRUB machine is never
+called a Limine host, which was the whole point of dropping the package test.
+
 ## Still unverified
 
 1. ~~The non-Limine `HookDir` mechanism has not been exercised in a real
@@ -252,12 +286,14 @@ non-Omarchy host.
    shadowed hooks "skipping overridden", with the initramfs still rebuilding
    and `-Qkk` clean. This was the last mechanism resting on `pacman.conf(5)`
    alone.
-2. **The three round-one fixes have not been re-run on the Limine guest**, and
-   the three round-two fixes (2.1–2.3) have not been run on the GRUB guest.
-   Both are dry-run and fixture verified only. `./lab reset` in each lab
-   directory plus a re-run is the next step; 2.1 in particular needs the
-   kernel-reinstall check repeated, since its whole point is what happens in a
-   *later* transaction.
+2. **The round-two fixes (2.1–2.3) have not been run on a guest.** They are
+   dry-run and fixture verified only; `ac62527` is being applied to a reset
+   GRUB guest now. 2.1 in particular needs the kernel-reinstall check
+   repeated — delete `/boot/limine.conf{,.old}` and
+   `/boot/EFI/Linux/omarchy_*.efi`, reinstall the kernel, confirm nothing
+   returns — because its whole point is what happens in a *later*
+   transaction. The round-one fixes (defects 1–3) were validated on the guest
+   that produced them, through a reboot and an 18/0 `--verify-only`.
 3. **systemd-boot** is still untested. GRUB was the guest that got built; the
    systemd-boot branch differs only in detection, which the fixture covers.
 4. **`sudo`-side `OMARCHY_PATH`.** `/etc/environment` is applied by `pam_env`;

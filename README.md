@@ -372,7 +372,15 @@ the `HookDir` boot-hook policy in a real pacman transaction and produced three
 more fixes: the `/usr/local/bin/mkinitcpio` shim bypass, a subshell ERR-trap
 cascade, and a false-failing ufw assertion).
 
-What that does *not* mean: the fixes those runs produced have not themselves
+Both guests were carried through a reboot. On the GRUB one, ufw came up
+**active** with `22/tcp ALLOW IN` and ssh reconnected on the first attempt —
+`--verify-only` after that reboot: 18 PASS, 0 FAIL. Bootloader detection was
+also exercised with the ESP mounted `drwx------`, with and without `bootctl`
+available: it answered `grub` in all four combinations, degrading to the
+warned package probe only in the worst case, and never mistaking a GRUB
+machine for a Limine one.
+
+What that does *not* mean: the fixes the GRUB run produced have not themselves
 been re-run on a guest yet, systemd-boot has only ever been exercised as a
 fixture, and no run has covered a non-btrfs or non-LUKS layout. The fixture
 matrix proves the decision logic takes the intended branch on CachyOS-shaped
