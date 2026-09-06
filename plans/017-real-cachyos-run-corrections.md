@@ -343,8 +343,18 @@ passwordless sudo" path and prove nothing about `/boot`.
    `e779c49` test, both in §2.6. Every fix in this plan has now been executed
    on real CachyOS, and the artefact assertion has been observed both passing
    and failing.
-3. **systemd-boot** is still untested. GRUB was the guest that got built; the
-   systemd-boot branch differs only in detection, which the fixture covers.
+3. **systemd-boot** is still untested, and so are non-btrfs and non-LUKS
+   layouts. GRUB was the guest that got built; the systemd-boot branch differs
+   only in detection, which the fixture covers.
+
+   Whoever picks that up does not need to build anything: the non-Limine lab
+   survives at `~/Work/t1nk33r-lab-cachyos-grub` with a pristine
+   *pre-Omarchy* GRUB CachyOS golden, so `LAB_NET=internet ./lab reset` gives
+   a clean non-Limine host in ~18 s. The variant's lab diff is
+   `evidence/22-lab.conf.grub.diff` + `evidence/23-cachyos-install.grub.diff`,
+   and `evidence/probe.sh` and `evidence/esp-umask-detect.sh` are reusable
+   as-is. The Limine lab is `~/Work/t1nk33r-lab-cachyos`. Both evidence
+   directories hold the per-commit logs cited throughout this plan.
 4. **`sudo`-side `OMARCHY_PATH`.** `/etc/environment` is applied by `pam_env`;
    whether `sudo omarchy update` picks it up depends on the sudo PAM stack and
    `env_reset`, so the documented answer is "run it as your user", not a claim
