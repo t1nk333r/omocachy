@@ -219,12 +219,30 @@ not deleted) plus inert overrides for the three
 `/usr/share/libalpm/hooks/*limine*` hooks. `limine-snapper-sync.service` is
 disabled.
 
+That override's `Exec` is not the stock one verbatim: it is
+`/usr/bin/env PATH=/usr/bin /usr/share/libalpm/scripts/mkinitcpio install`.
+`limine-mkinitcpio-hook` ships a PATH shim at `/usr/local/bin/mkinitcpio`, and
+the stock alpm script calls `mkinitcpio` **unqualified** — so without the pin
+the shim wins, and (stdin being at EOF in a pacman hook, which answers its
+`run limine-mkinitcpio now? [Y/n]` prompt with the default) a GRUB machine
+grows `/boot/limine.conf` and a Limine UKI on every kernel transaction. That
+was observed, deleted, and observed coming back on a GRUB CachyOS guest.
+
 No packaged file is edited anywhere in this path: `pacman -Qkk
 limine-mkinitcpio-hook` stays clean, and there is nothing for a package
 upgrade to silently revert. **Restore path:** delete
 `/etc/pacman.d/hooks-omocachy/` and the two `HookDir` lines. There is no
 `/usr/bin/true` no-op over the initramfs hook and no `NoUpgrade` entry —
 both were removed as unsafe (see `plans/016-*.md`).
+
+This is no longer inferred from `pacman.conf(5)`. On a GRUB CachyOS guest,
+`pacman -S --debug linux-cachyos` prints both `HookDir` lines, then
+`parsing hook file /etc/pacman.d/hooks-omocachy/90-mkinitcpio-install.hook`
+followed by `skipping overridden hook` for the `/etc/pacman.d/hooks/` and
+`/usr/share/libalpm/hooks/` copies and for all three `*limine*` hooks — with
+the initramfs still rebuilding, `limine-install` never running, and
+`pacman -Qkk limine-mkinitcpio-hook` reporting 0 altered files
+(`plans/017-*.md`).
 
 **Refusal, not guesswork, on the HOOKS array.** If your captured HOOKS mix
 the two initramfs flavours (`systemd` + `udev`, or `encrypt` + `sd-encrypt`),
@@ -345,14 +363,22 @@ that puts failing stubs for `sudo`/`pacman`/`cp`/`mv`/`systemctl` first on
 `OMOCACHY_SYSROOT=<dir>`, which redirects every *read* of host state and
 requires `--dry-run`.
 
-**Status: not yet validated on a real CachyOS host.** Every guarantee above
-is grounded in the installed 4.0.2 package contents and exercised by
-`--dry-run`, the fixture matrix and the merge tests, but the wrapper has so
-far only run for real on the maintainers' Omarchy-ISO machine (re-apply
-path). The fixture matrix proves the decision logic takes the intended branch
-on CachyOS-shaped input; it does not prove the resulting system boots. Treat
-the first CachyOS run as a test: take a snapshot, read the dry-run, keep a
-live USB handy.
+**Status: run on real CachyOS twice, with caveats.** Two throwaway CachyOS
+260809 guests have run this for real: a **Limine + LUKS2 + btrfs** one (which
+reached the Omarchy greeter, passed every assertion, and produced the three
+corrections in `plans/017-*.md` — the missing ISO package closure, the ufw
+ssh lockout and the broken `omarchy update`), and a **GRUB** one (which proved
+the `HookDir` boot-hook policy in a real pacman transaction and produced three
+more fixes: the `/usr/local/bin/mkinitcpio` shim bypass, a subshell ERR-trap
+cascade, and a false-failing ufw assertion).
+
+What that does *not* mean: the fixes those runs produced have not themselves
+been re-run on a guest yet, systemd-boot has only ever been exercised as a
+fixture, and no run has covered a non-btrfs or non-LUKS layout. The fixture
+matrix proves the decision logic takes the intended branch on CachyOS-shaped
+input; it does not prove the resulting system boots. Treat your first CachyOS
+run as a test: take a snapshot, read the dry-run, keep a live USB handy — and
+if you administer the box over ssh, read the ufw section above first.
 
 ## 4. How CachyOS/Omarchy Conflicts Are Resolved
 

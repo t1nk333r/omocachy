@@ -193,6 +193,16 @@ diagnose_failure() {
 on_err() {
     local rc="$1" line="$2"
     trap - ERR
+    # A subshell (command substitution, process substitution, an explicit
+    # `( ... )`) inherits this trap under `set -E`. Reporting "aborted" from
+    # there is a lie — the parent carries on — and diagnose_failure would scan
+    # a log that already contains its own previous output, nesting it. Only
+    # the main shell reports. Observed on the GRUB CachyOS guest: a Port-less
+    # sshd_config made a grep in a process substitution exit 1 and produced
+    # ~280 lines of nested false "aborted" blocks.
+    if [[ $BASHPID != "$$" ]]; then
+        exit "$rc"
+    fi
     echo "" >&2
     echo "Error: aborted at line $line (exit $rc) during step: $CURRENT_STEP" >&2
     diagnose_failure
@@ -531,14 +541,19 @@ check_apply_requirements() {
     fi
     return 0
 }
+# Every Port an sshd is configured to listen on: the main config plus its
+# drop-ins (a drop-in is the normal shape). One awk, no pipeline and no grep:
+# a stock sshd_config has only `#Port 22`, and a grep that matches nothing
+# exits 1, which under `set -e` inside a process substitution is a failure
+# this function has no business producing.
 ssh_ports() {
-    local f ports=()
+    local f p ports=()
     shopt -s nullglob
     for f in "$(host_path /etc/ssh/sshd_config)" "$(host_path /etc/ssh/sshd_config.d)"/*.conf; do
         [[ -r $f ]] || continue
         while read -r p; do
             [[ -n $p ]] && ports+=("$p")
-        done < <(grep -iE '^[[:space:]]*Port[[:space:]]+[0-9]+' "$f" | awk '{print $2}')
+        done < <(awk 'tolower($1) == "port" && $2 ~ /^[0-9]+$/ { print $2 }' "$f")
     done
     shopt -u nullglob
     ((${#ports[@]})) || ports=(22)
@@ -678,7 +693,23 @@ check_hookdir_override() {
     grep -qxF "HookDir = $PACMAN_HOOK_DIR/" /etc/pacman.conf || return 1
     grep -qxF "HookDir = $OMOCACHY_HOOK_DIR/" /etc/pacman.conf || return 1
     [[ -f $OMOCACHY_HOOK_DIR/90-mkinitcpio-install.hook ]] || return 1
-    grep -q '/usr/share/libalpm/scripts/mkinitcpio install' "$OMOCACHY_HOOK_DIR/90-mkinitcpio-install.hook"
+    grep -q '/usr/share/libalpm/scripts/mkinitcpio install' "$OMOCACHY_HOOK_DIR/90-mkinitcpio-install.hook" || return 1
+    # The PATH pin is what keeps /usr/local/bin/mkinitcpio (the
+    # limine-mkinitcpio-hook shim) out of the alpm script's unqualified
+    # `mkinitcpio` lookup. Without it the hook still rebuilds the initramfs
+    # and then runs limine-mkinitcpio anyway.
+    grep -q '^Exec = /usr/bin/env PATH=/usr/bin ' "$OMOCACHY_HOOK_DIR/90-mkinitcpio-install.hook"
+}
+check_no_limine_artifacts() {
+    # End-state form of the check above: on a machine Limine does not boot,
+    # no kernel transaction should have produced a Limine config or UKI.
+    [[ $BOOTLOADER != "limine" ]] || return 0
+    local found
+    if ! found="$(sudo -n sh -c 'ls -1 /boot/limine.conf /boot/EFI/Linux/omarchy_*.efi 2>/dev/null' 2>/dev/null)"; then
+        echo "      (/boot is not readable without a password; not treated as a failure)"
+        return 0
+    fi
+    [[ -z $found ]] || { echo "      Limine artefacts on a $BOOTLOADER machine: $(tr '\n' ' ' <<<"$found")" >&2; return 1; }
 }
 check_limine_service() {
     [[ $BOOTLOADER == "limine" ]] || ! systemctl is-enabled --quiet limine-snapper-sync.service 2>/dev/null
@@ -726,13 +757,19 @@ check_ufw_ssh() {
     # Only meaningful where an sshd is enabled and ufw exists.
     command -v ufw &>/dev/null || return 0
     $SSHD_PRESENT || return 0
-    local status port
-    if ! status="$(sudo -n ufw status 2>/dev/null)"; then
-        echo "      (cannot read 'ufw status' without a password; not treated as a failure)"
+    # `ufw status` is the wrong source: apply-system's firewall.sh sets
+    # ENABLED=yes and enables the unit without starting it, so until the next
+    # boot ufw reports "Status: inactive" and lists NO rules even though the
+    # allow was accepted and is in /etc/ufw/user.rules. `ufw show added`
+    # reports the configured rules in either state (GRUB CachyOS guest: this
+    # was the suite's only FAIL, and it was wrong).
+    local added port
+    if ! added="$(sudo -n ufw show added 2>/dev/null)"; then
+        echo "      (cannot read 'ufw show added' without a password; not treated as a failure)"
         return 0
     fi
     for port in $(ssh_ports); do
-        grep -qE "^${port}/tcp[[:space:]]+ALLOW" <<<"$status" || return 1
+        grep -qE "allow[[:space:]]+${port}(/tcp)?\b" <<<"$added" || return 1
     done
 }
 check_omarchy_path_env() {
@@ -768,6 +805,7 @@ run_assertion_suite() {
     assert "$ZZ_HOOKS_CONF exists and the effective HOOKS are bootable-shaped (encryption hook matches the cmdline flavour, plymouth and an overlayfs hook present)" check_hooks
     assert "pacman -Qkk limine-mkinitcpio-hook is clean (no packaged file was edited)" check_limine_hook_pkg
     assert "non-limine machine overrides the limine pacman hooks from $OMOCACHY_HOOK_DIR and keeps stock initramfs rebuilds" check_hookdir_override
+    assert "non-limine machine has no Limine config or UKI on /boot (the /usr/local/bin/mkinitcpio shim did not run limine-mkinitcpio)" check_no_limine_artifacts
     assert "non-limine machine has limine-snapper-sync.service disabled" check_limine_service
     assert "$LIMINE_DEFAULT carries the ENABLE_UKI/BOOT_ORDER/TARGET_OS_NAME overrides on a Limine host" check_limine_default
     assert "sddm enabled; NetworkManager enabled" check_services
@@ -931,9 +969,30 @@ apply_boot_hook_policy() {
     # Stock initramfs rebuilds: a copy of mkinitcpio's own hook, which the
     # limine variant in /etc/pacman.d/hooks would otherwise shadow. The two
     # differ only in the Exec and in one Target (vmlinuz vs pkgbase).
+    #
+    # The Exec is rewritten, and that rewrite is load-bearing.
+    # /usr/share/libalpm/scripts/mkinitcpio calls `mkinitcpio "${args[@]}"`
+    # UNQUALIFIED, and limine-mkinitcpio-hook ships a PATH shim at
+    # /usr/local/bin/mkinitcpio which wins that lookup. The shim runs the real
+    # binary and then, seeing -p in the args, prompts "run limine-mkinitcpio
+    # now? [Y/n]" — with stdin at EOF inside a pacman hook the empty answer
+    # takes the yes branch, so a GRUB machine gets /boot/limine.conf and a
+    # Limine UKI in /boot/EFI/Linux written on every kernel transaction
+    # (observed on the GRUB CachyOS guest: deleted both, reinstalled the
+    # kernel, both came back). Pinning PATH to /usr/bin for the hook keeps the
+    # shim out of the lookup without touching the packaged file.
     local stock=/usr/share/libalpm/hooks/90-mkinitcpio-install.hook
+    local override="$OMOCACHY_HOOK_DIR/90-mkinitcpio-install.hook"
     if [[ -f $(host_path "$stock") ]]; then
-        run_root cp -f "$stock" "$OMOCACHY_HOOK_DIR/90-mkinitcpio-install.hook"
+        run_root cp -f "$stock" "$override"
+        run_root sed -i \
+            's|^Exec = /usr/share/libalpm/scripts/mkinitcpio |Exec = /usr/bin/env PATH=/usr/bin /usr/share/libalpm/scripts/mkinitcpio |' \
+            "$override"
+        if ! $DRY_RUN && ! grep -q '^Exec = /usr/bin/env PATH=/usr/bin ' "$override"; then
+            echo "Error: could not pin PATH in $override (upstream changed the Exec line?)." >&2
+            echo "Without it /usr/local/bin/mkinitcpio (limine-mkinitcpio-hook's shim) runs limine-mkinitcpio on every kernel upgrade of this $BOOTLOADER machine." >&2
+            exit 1
+        fi
     else
         echo "Warning: $stock not found (mkinitcpio not installed?); this machine will have NO initramfs rebuild hook once limine-mkinitcpio-hook lands. Install mkinitcpio first." >&2
     fi

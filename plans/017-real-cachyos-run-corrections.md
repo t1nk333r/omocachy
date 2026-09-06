@@ -167,23 +167,100 @@ expected noise. New assertion covers the drop-in.
   loudly if a dry run ever actually executes one. Suite: 123 assertions, 0
   failures.
 
+## Second round: the GRUB CachyOS guest
+
+A second guest (GRUB, LUKS2+btrfs, `systemd`/`sd-encrypt`, `rd.luks.uuid=`,
+`[cachyos]` above `[core]`; evidence in
+`~/Work/t1nk33r-lab-cachyos-grub/evidence/`) exercised the non-Limine path
+against `c00d638`.
+
+**The `HookDir` mechanism from plan 016 is now PROVEN, not reasoned.**
+`pacman -S --debug linux-cachyos` on that guest:
+
+```
+debug: config: HookDir: /etc/pacman.d/hooks/
+debug: config: HookDir: /etc/pacman.d/hooks-omocachy/
+debug: parsing hook file /etc/pacman.d/hooks-omocachy/90-mkinitcpio-install.hook
+debug: skipping overridden hook /etc/pacman.d/hooks/90-mkinitcpio-install.hook
+debug: skipping overridden hook /usr/share/libalpm/hooks/90-mkinitcpio-install.hook
+```
+
+— with the same "skipping overridden" for all three `*limine*` hooks, the
+initramfs still rebuilding on a kernel reinstall (mtime 01:45:24 → 01:50:38,
+stock "Building image from preset"), `pacman -Qkk limine-mkinitcpio-hook`
+reporting 56 files and 0 altered, and `limine-install` never running
+(`BOOTX64.EFI` still byte-identical to GRUB's `grubx64.efi`). Three more
+defects fell out of it.
+
+### 2.1 `/usr/local/bin/mkinitcpio` bypasses the override one level down
+
+`limine-mkinitcpio-hook` ships a PATH shim at `/usr/local/bin/mkinitcpio`, and
+`/usr/share/libalpm/scripts/mkinitcpio` (line 237) calls `mkinitcpio
+"${args[@]}"` **unqualified** — so the stock hook this project installs
+resolved to the shim. The shim runs the real binary, then sees `-p` in the
+args and prompts `run limine-mkinitcpio now? [Y/n]`; inside a pacman hook
+stdin is at EOF, the empty answer takes the yes branch, and a GRUB machine
+gets `/boot/limine.conf` (+`.old`) and a Limine UKI at
+`/boot/EFI/Linux/omarchy_linux-cachyos.efi` written on **every** kernel
+transaction. The guest deleted both, reinstalled the kernel, and they came
+back. Not a boot hijack — but exactly the ESP litter the policy exists to
+prevent, produced by the mechanism meant to prevent it.
+
+**Fix:** the override hook's Exec is rewritten to
+`Exec = /usr/bin/env PATH=/usr/bin /usr/share/libalpm/scripts/mkinitcpio install`,
+pinning the lookup away from `/usr/local/bin`. The rewrite is verified after
+it is applied (a future upstream Exec change makes the wrapper stop rather
+than silently regress), asserted directly, and asserted again in end-state
+form: no `/boot/limine.conf` and no `/boot/EFI/Linux/omarchy_*.efi` on a
+non-Limine host.
+
+### 2.2 The ERR trap fired inside subshells and ate its own output
+
+`ssh_ports` piped `grep -iE '^\s*Port\s+[0-9]+' | awk`. A stock
+`sshd_config` has only `#Port 22`, so grep exited 1; under `set -Ee` the ERR
+trap fires **inside the process substitution**, printing a full "Error:
+aborted at line N … " block and running `diagnose_failure`, which greps the
+log for error patterns and therefore matched its own previous output. The
+guest's log carried ~280 lines of nested false aborts. The run did not
+actually abort (the trap's `exit` only killed the subshell), so the damage was
+a terrifying, unreadable log — twice.
+
+**Fix, both halves:** `ssh_ports` uses a single `awk` (no pipeline, no grep,
+exits 0 on no match), and `on_err` returns early when `$BASHPID != $$`, so
+only the main shell ever reports an abort. The second half is the general
+guard — any future subshell failure now cannot produce that cascade.
+
+### 2.3 `check_ufw_ssh` was a false FAIL
+
+The ufw fix worked (`ufw allow 22/tcp` → "Rules updated", and
+`/etc/ufw/user.rules` carries the tuple), but `firewall.sh` leaves ufw
+`ENABLED=yes` with the unit *enabled and not started*, so until the next boot
+`ufw status` prints "Status: inactive" and lists nothing. The assertion grepped
+that empty listing and failed. **Fix:** read `ufw show added`, which reports
+configured rules in either state.
+
+Suite after these three: 124 assertions, 0 failures. Guest: 16/17 assertions
+passed, the one FAIL being 2.3 above, and `tests/run.sh` ran 117/0 in the
+guest before the install — confirming the test-stub fix holds on a
+non-Omarchy host.
+
 ## Still unverified
 
-1. **The non-Limine `HookDir` mechanism (plan 016) has NOT been exercised in a
-   real pacman transaction.** The guest is Limine, so both `643bb57` and
-   `2b5fa74` take `boot_hook_policy=limine-native` and are indistinguishable
-   there. `pacman.conf(5)` is still the only source for "later HookDir wins"
-   and "naming any HookDir replaces the `/etc/pacman.d/hooks` default". This
-   needs a GRUB or systemd-boot CachyOS guest, and it must show: both HookDir
-   lines present; `limine-install` never running and no Limine EFI binary
-   appearing on the ESP; the initramfs still rebuilding on a kernel
-   install/reinstall (the failure mode the old no-op caused); `pacman -Qkk`
-   clean; bootloader detected from ESP contents while the `limine` package is
-   installed as an omarchy dependency.
-2. **These three fixes have not themselves been run on the guest.** They are
-   dry-run and fixture verified only. `./lab reset` + a re-run is the next
-   step.
-3. **`sudo`-side `OMARCHY_PATH`.** `/etc/environment` is applied by `pam_env`;
+1. ~~The non-Limine `HookDir` mechanism has not been exercised in a real
+   pacman transaction.~~ **RESOLVED** by the GRUB guest above: pacman's own
+   `--debug` output shows both HookDir lines, the override parsed and all four
+   shadowed hooks "skipping overridden", with the initramfs still rebuilding
+   and `-Qkk` clean. This was the last mechanism resting on `pacman.conf(5)`
+   alone.
+2. **The three round-one fixes have not been re-run on the Limine guest**, and
+   the three round-two fixes (2.1–2.3) have not been run on the GRUB guest.
+   Both are dry-run and fixture verified only. `./lab reset` in each lab
+   directory plus a re-run is the next step; 2.1 in particular needs the
+   kernel-reinstall check repeated, since its whole point is what happens in a
+   *later* transaction.
+3. **systemd-boot** is still untested. GRUB was the guest that got built; the
+   systemd-boot branch differs only in detection, which the fixture covers.
+4. **`sudo`-side `OMARCHY_PATH`.** `/etc/environment` is applied by `pam_env`;
    whether `sudo omarchy update` picks it up depends on the sudo PAM stack and
    `env_reset`, so the documented answer is "run it as your user", not a claim
    that sudo now works.
