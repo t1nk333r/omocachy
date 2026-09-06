@@ -380,8 +380,14 @@ available: it answered `grub` in all four combinations, degrading to the
 warned package probe only in the worst case, and never mistaking a GRUB
 machine for a Limine one.
 
-What that does *not* mean: the fixes the GRUB run produced have not themselves
-been re-run on a guest yet, systemd-boot has only ever been exercised as a
+Every fix those runs produced was re-run on a guest afterwards, including the
+one that matters most: on a pristine GRUB install the PATH-pinned hook
+produced no `limine.conf` and no UKI across a kernel reinstall (both appeared
+every time before the pin), and the assertion that checks for them was
+observed both passing on a clean ESP and failing on a planted
+`/boot/limine.conf`.
+
+What that does *not* mean: systemd-boot has only ever been exercised as a
 fixture, and no run has covered a non-btrfs or non-LUKS layout. The fixture
 matrix proves the decision logic takes the intended branch on CachyOS-shaped
 input; it does not prove the resulting system boots. Treat your first CachyOS

@@ -316,6 +316,20 @@ found". The same inference was wrong in `check_ufw_ssh` and
 latter distinguishes "no readable limine.conf" from "limine.conf without
 `initramfs_async=0`".
 
+`e779c49` was then tested on the guest in **both** directions, which is the
+part that matters: an assertion never observed failing is not yet an
+assertion.
+
+| state | result |
+| --- | --- |
+| clean ESP, NOPASSWD sudo | rc=0, 19 PASS / 0 FAIL, **and no "needs passwordless sudo" or "not readable" note anywhere** — the non-degraded branch really looked and found nothing |
+| `sudo touch /boot/limine.conf` | rc=1, 18 PASS / 1 FAIL, naming the path: "Limine artefacts on a grub machine: /boot/limine.conf" |
+| `sudo rm -f /boot/limine.conf` | rc=0, 19 PASS / 0 FAIL, PASS line back, still no note |
+
+Only that guest can exercise the non-degraded branch: the maintainers' host
+has no NOPASSWD sudo, so there the checks correctly take the "needs
+passwordless sudo" path and prove nothing about `/boot`.
+
 ## Still unverified
 
 1. ~~The non-Limine `HookDir` mechanism has not been exercised in a real
@@ -324,15 +338,11 @@ latter distinguishes "no readable limine.conf" from "limine.conf without
    shadowed hooks "skipping overridden", with the initramfs still rebuilding
    and `-Qkk` clean. This was the last mechanism resting on `pacman.conf(5)`
    alone.
-2. ~~The round-two fixes have not been run on a guest.~~ **RESOLVED** for
-   2.1–2.3 by the pristine `ac62527` run in §2.6 (19/19, kernel reinstall
-   produced no Limine artefacts, clean log, live ufw assertion). What is left
-   is **defect 2.6's own fix**, which is dry-run and host-`--verify-only`
-   verified only — on the maintainers' host the three checks now correctly
-   report "needs passwordless sudo" instead of claiming /boot is unreadable,
-   but that is the *degraded* branch. The GRUB guest has NOPASSWD, so a re-run
-   there is what proves the non-degraded branch still distinguishes clean from
-   dirty.
+2. ~~The round-two fixes have not been run on a guest.~~ **RESOLVED**, all of
+   them: 2.1–2.3 by the pristine `ac62527` run and 2.6 by the two-direction
+   `e779c49` test, both in §2.6. Every fix in this plan has now been executed
+   on real CachyOS, and the artefact assertion has been observed both passing
+   and failing.
 3. **systemd-boot** is still untested. GRUB was the guest that got built; the
    systemd-boot branch differs only in detection, which the fixture covers.
 4. **`sudo`-side `OMARCHY_PATH`.** `/etc/environment` is applied by `pam_env`;
