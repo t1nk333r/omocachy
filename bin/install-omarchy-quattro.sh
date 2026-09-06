@@ -700,15 +700,26 @@ check_hookdir_override() {
     # and then runs limine-mkinitcpio anyway.
     grep -q '^Exec = /usr/bin/env PATH=/usr/bin ' "$OMOCACHY_HOOK_DIR/90-mkinitcpio-install.hook"
 }
+# Can this check reach root without a prompt? Probed on its own, because the
+# alternative -- inferring it from the exit status of the command being run --
+# cannot tell "no passwordless sudo" from "the command found nothing", which
+# is the SUCCESS case for most of these. `ls` with no matches exits 2, so the
+# checks below used to announce "/boot is not readable" on a perfectly
+# readable /boot and pass for the wrong reason (found on the GRUB guest).
+can_sudo_quietly() {
+    sudo -n true 2>/dev/null
+}
+
 check_no_limine_artifacts() {
     # End-state form of the check above: on a machine Limine does not boot,
     # no kernel transaction should have produced a Limine config or UKI.
     [[ $BOOTLOADER != "limine" ]] || return 0
-    local found
-    if ! found="$(sudo -n sh -c 'ls -1 /boot/limine.conf /boot/EFI/Linux/omarchy_*.efi 2>/dev/null' 2>/dev/null)"; then
-        echo "      (/boot is not readable without a password; not treated as a failure)"
+    if ! can_sudo_quietly; then
+        echo "      (needs passwordless sudo to inspect /boot; not treated as a failure)"
         return 0
     fi
+    local found
+    found="$(sudo -n sh -c 'ls -1 /boot/limine.conf /boot/limine.conf.old /boot/EFI/Linux/omarchy_*.efi 2>/dev/null' || true)"
     [[ -z $found ]] || { echo "      Limine artefacts on a $BOOTLOADER machine: $(tr '\n' ' ' <<<"$found")" >&2; return 1; }
 }
 check_limine_service() {
@@ -764,10 +775,11 @@ check_ufw_ssh() {
     # reports the configured rules in either state (GRUB CachyOS guest: this
     # was the suite's only FAIL, and it was wrong).
     local added port
-    if ! added="$(sudo -n ufw show added 2>/dev/null)"; then
-        echo "      (cannot read 'ufw show added' without a password; not treated as a failure)"
+    if ! can_sudo_quietly; then
+        echo "      (needs passwordless sudo to read 'ufw show added'; not treated as a failure)"
         return 0
     fi
+    added="$(sudo -n ufw show added 2>/dev/null || true)"
     for port in $(ssh_ports); do
         grep -qE "allow[[:space:]]+${port}(/tcp)?\b" <<<"$added" || return 1
     done
@@ -786,8 +798,13 @@ check_limine_cmdline_args() {
     $LUKS_DETECTED || return 0
     pkg_installed omarchy-settings || return 0
     local generated
-    if ! generated="$(sudo -n cat /boot/limine.conf 2>/dev/null)"; then
-        echo "      (/boot is not readable without a password; not treated as a failure)"
+    if ! can_sudo_quietly; then
+        echo "      (needs passwordless sudo to read /boot/limine.conf; not treated as a failure)"
+        return 0
+    fi
+    generated="$(sudo -n cat /boot/limine.conf 2>/dev/null || true)"
+    if [[ -z $generated ]]; then
+        echo "      (no readable /boot/limine.conf to inspect; not treated as a failure)"
         return 0
     fi
     if grep -q 'initramfs_async=0' <<<"$generated"; then

@@ -278,6 +278,44 @@ root-only ESP *and* no `bootctl` — it degrades to the package probe and still
 answers `grub`, because `limine` is never probed. A GRUB machine is never
 called a Limine host, which was the whole point of dropping the package test.
 
+### 2.6 `ac62527` validated on a pristine GRUB guest, and one more assertion bug
+
+Re-run from the pristine golden with all three round-two fixes: **19/19
+assertions, exit 0**, `tests/run.sh` 118/0 in the guest, reboot back onto GRUB
+and into the Omarchy greeter, `--verify-only` 19/19 after it.
+
+- 2.1 holds, and this is the decisive evidence. The override's Exec on the
+  guest is the PATH-pinned form; `pacman -S --debug linux-cachyos` shows the
+  hooks-omocachy hook parsed and all five others "skipping overridden", the
+  initramfs rebuilding (mtime 01:59:40 → 02:01:28), and **no** "does not
+  update Limine boot entries", no "Building UKI", no `limine.conf`, no
+  `EFI/Linux`. `find /boot -iname 'limine*' -o -path '*EFI/Linux*'` is empty
+  before and after. On `c00d638` the same command produced both every time.
+- 2.2 holds: zero "aborted at line" blocks and no nested `diagnose_failure`
+  output, with the same four Port-less `sshd_config` drop-ins (1196 log lines
+  against 1391, ~280 of which had been noise).
+- 2.3 holds and is *live*, not inert: `sudo -n ufw show added` returned rc=0
+  and printed `ufw allow 22/tcp` with no password prompt, so the assertion is
+  really asserting on that guest.
+- The multi-loader collision warning is gone on a clean install
+  (`bootloader_source=ESP contents under /boot`, no "also found"), confirming
+  the `/boot/limine.conf` in §2.5 was 2.1's litter and that the PATH pin
+  covers every path that wrote it.
+
+**Defect 2.6 (mine, in the new assertion).** `check_no_limine_artifacts` ran
+`sudo -n sh -c 'ls -1 …'` and inferred "cannot read /boot" from a non-zero
+exit. But `ls` with no matches exits 2 — which is the **success** case — so on
+a readable `/boot` with no artefacts it printed "(/boot is not readable
+without a password)" and passed for the wrong reason. It still failed
+correctly when artefacts existed, so it was never inert, but it could not
+distinguish clean from unreadable, which is precisely what the note claimed.
+Fixed by probing the capability separately (`can_sudo_quietly`, a bare
+`sudo -n true`) and letting the command's own empty output mean "nothing
+found". The same inference was wrong in `check_ufw_ssh` and
+`check_limine_cmdline_args`; all three now use the shared probe, and the
+latter distinguishes "no readable limine.conf" from "limine.conf without
+`initramfs_async=0`".
+
 ## Still unverified
 
 1. ~~The non-Limine `HookDir` mechanism has not been exercised in a real
@@ -286,14 +324,15 @@ called a Limine host, which was the whole point of dropping the package test.
    shadowed hooks "skipping overridden", with the initramfs still rebuilding
    and `-Qkk` clean. This was the last mechanism resting on `pacman.conf(5)`
    alone.
-2. **The round-two fixes (2.1–2.3) have not been run on a guest.** They are
-   dry-run and fixture verified only; `ac62527` is being applied to a reset
-   GRUB guest now. 2.1 in particular needs the kernel-reinstall check
-   repeated — delete `/boot/limine.conf{,.old}` and
-   `/boot/EFI/Linux/omarchy_*.efi`, reinstall the kernel, confirm nothing
-   returns — because its whole point is what happens in a *later*
-   transaction. The round-one fixes (defects 1–3) were validated on the guest
-   that produced them, through a reboot and an 18/0 `--verify-only`.
+2. ~~The round-two fixes have not been run on a guest.~~ **RESOLVED** for
+   2.1–2.3 by the pristine `ac62527` run in §2.6 (19/19, kernel reinstall
+   produced no Limine artefacts, clean log, live ufw assertion). What is left
+   is **defect 2.6's own fix**, which is dry-run and host-`--verify-only`
+   verified only — on the maintainers' host the three checks now correctly
+   report "needs passwordless sudo" instead of claiming /boot is unreadable,
+   but that is the *degraded* branch. The GRUB guest has NOPASSWD, so a re-run
+   there is what proves the non-degraded branch still distinguishes clean from
+   dirty.
 3. **systemd-boot** is still untested. GRUB was the guest that got built; the
    systemd-boot branch differs only in detection, which the fixture covers.
 4. **`sudo`-side `OMARCHY_PATH`.** `/etc/environment` is applied by `pam_env`;
