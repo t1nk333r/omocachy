@@ -87,7 +87,7 @@ require_cmds tar jq find du
 [[ -r $PATHS_FILE ]] || die "capture list not readable: $PATHS_FILE"
 
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
-BUNDLE_ID="omocachy-profile-$(hostname -s 2>/dev/null || echo host)-$TIMESTAMP"
+BUNDLE_ID="omocachy-profile-$(uname -n)-$TIMESTAMP"
 BUNDLE="$OUT_ROOT/$BUNDLE_ID"
 WORK="$(mktemp -d -t omocachy-export-XXXXXX)"
 trap 'rm -rf "$WORK"' EXIT
@@ -316,7 +316,7 @@ write_manifest() {
     jq -n \
         --argjson schema "$PROFILE_SCHEMA" \
         --arg created "$(date -Is)" \
-        --arg host "$(hostname -s 2>/dev/null || echo unknown)" \
+        --arg host "$(uname -n)" \
         --arg user "$USER" \
         --arg home "$HOME" \
         --arg source_id "$SOURCE_ID" \
@@ -385,7 +385,7 @@ else
         echo "| Fact | Value |"
         echo "|---|---|"
         echo "| Created | $(date -Is) |"
-        echo "| Source host | $(hostname -s 2>/dev/null) ($SOURCE_ID, kernel $(uname -r)) |"
+        echo "| Source host | $(uname -n) ($SOURCE_ID, kernel $(uname -r)) |"
         echo "| User / home | $USER / $HOME |"
         echo "| Omarchy | ${OMARCHY_VERSION:-absent} / settings ${SETTINGS_VERSION:-absent} |"
         echo "| Quickshell | ${QUICKSHELL_PKG:-absent} ${QUICKSHELL_VERSION:-} |"

@@ -138,7 +138,7 @@ echo ""
 echo "Bundle:   $BUNDLE"
 echo "  created $SRC_CREATED on $SRC_HOST ($SRC_USER, home $SRC_HOME)"
 echo "  omarchy ${SRC_OMARCHY:-absent}, GPU $SRC_GPU, ${#CAPTURED[@]} captured paths"
-echo "Target:   $(hostname -s 2>/dev/null) ($TGT_ID), omarchy ${TGT_OMARCHY:-absent}, GPU $TGT_GPU"
+echo "Target:   $(uname -n) ($TGT_ID), omarchy ${TGT_OMARCHY:-absent}, GPU $TGT_GPU"
 echo "Backups:  $BACKUP_DIR (with rollback.sh)"
 echo "Stages:   $(for s in "${ALL_STAGES[@]}"; do stage_enabled "$s" && printf '%s ' "$s"; done)"
 echo ""
@@ -150,6 +150,9 @@ confirm "Restore into $HOME?" || die "aborted."
 
 if ! $DRY_RUN; then
     mkdir -p "$BACKUP_DIR" "$REPORT_DIR"
+    # From here on every line also lands in the report directory, so a
+    # migration that fails halfway leaves a transcript next to its lists.
+    start_logging "$REPORT_DIR/import.log"
 fi
 
 STAGE_RESULT=()
@@ -348,7 +351,7 @@ stage_packages() {
     fi
 
     if ((${#foreign[@]})); then
-        local helper=""
+        local helper="" h
         for h in paru yay; do have "$h" && {
             helper="$h"
             break

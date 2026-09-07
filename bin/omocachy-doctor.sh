@@ -76,7 +76,7 @@ PLUGIN_DIR="$OMARCHY_CONFIG/plugins"
 SHELL_JSON="$OMARCHY_CONFIG/shell.json"
 
 echo "=== omocachy-doctor.sh ==="
-echo "host: $(hostname -s 2>/dev/null)  user: $USER"
+echo "host: $(uname -n)  user: $USER"
 echo ""
 
 # --- system layer ----------------------------------------------------------
