@@ -242,10 +242,39 @@ What the real run found, and what changed because of it:
    importer now runs `hyprctl reload` after the merge when a session is
    live; `hyprctl configerrors` was empty afterwards.
 
+## LUKS (2026-09-08)
+
+`cachyos-installer` has no headless LUKS option, so the migrated guest's
+root was encrypted in place from the live ISO (`./lab rescue`, a new lab
+mode that boots the media with the disk attached): btrfs shrunk 64 MiB,
+`cryptsetup reencrypt --encrypt --type luks2 --reduce-device-size 64M`,
+then in the chroot `sd-encrypt` in HOOKS, `rd.luks.uuid=`/`rd.luks.name=`
+on `KERNEL_CMDLINE[default]`, `/etc/crypttab`, `limine-mkinitcpio`. The
+btrfs UUID survives, so `root=UUID=` and fstab needed no change.
+
+- First boot after the conversion already went through the wrapper's
+  transform (the drop-ins were present): effective HOOKS `base systemd
+  plymouth keyboard autodetect microcode modconf kms sd-vconsole block
+  sd-encrypt filesystems fsck sd-btrfs-overlayfs` — Omarchy's udev/encrypt
+  array flavour-mapped to systemd — and it unlocked the LUKS root from
+  `rd.luks.uuid=` and reached the greeter.
+- Re-applying the wrapper on that guest: `LUKS detected: true`, 10/10
+  assertions incl. the sd-encrypt one, exit 0; reboot → passphrase prompt
+  → Omarchy greeter, `ID=cachyos`, `sddm` active (`luks-final.png`).
+- Found on the way: `pacman-key --recv-keys` on a re-apply aborted the run
+  on a transient keyserver failure although the key was already present.
+  The wrapper now skips the fetch when the key is in the keyring and
+  otherwise falls back through two public keyservers.
+- Caveat: this is LUKS via in-place conversion plus the re-apply path, not
+  a fresh install of the wrapper onto a LUKS CachyOS. The capture on a
+  fresh LUKS host contains `sd-encrypt` already, which the transform
+  preserves by construction; the assertion covers it.
+- Lab note: systemd's passphrase prompt times out into emergency mode if
+  the keystrokes arrive late; type ~20 s after power-on.
+
 ## Still unverified (release gates)
 
-- **LUKS, GRUB and systemd-boot CachyOS installs** — the lab guest is
-  Limine, unencrypted. The `sd-encrypt` transform and the non-Limine hook
+- **GRUB and systemd-boot CachyOS installs** — the non-Limine hook
   overrides are exercised only by the dry-run and the transform harness.
 - **Real GPUs** — the VM reports vendor `none`; `nvidia.sh`/`amd-rocm.sh`
   ran only as dry-run here.

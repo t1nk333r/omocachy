@@ -222,7 +222,7 @@ finishes and uses the same variable for its own re-runs.
 
 **Status: validated on one real CachyOS install** (2026-09-07, plan 016): a
 fresh CachyOS 260809 "minimal" (server profile, no desktop) VM with btrfs,
-Limine, snapper and the systemd initramfs, no LUKS. The wrapper ran end to
+Limine, snapper and the systemd initramfs, then the same guest with its root converted to LUKS2. The wrapper ran end to
 end with all ten assertions passing, the machine rebooted through the
 transformed HOOKS drop-in into Omarchy's SDDM greeter with `ID=cachyos`
 intact, and a Hyprland/Quickshell session came up. Not yet covered: a LUKS

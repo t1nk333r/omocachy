@@ -106,11 +106,10 @@ Details and evidence: the plan file.
 
 ## Release gates (the honest "not done" list)
 
-1. **LUKS and non-Limine CachyOS installs** — the lab guest is Limine and
-   unencrypted, so the `sd-encrypt` transform (`rd.luks.uuid=` boots) and
-   the GRUB/systemd-boot hook overrides are still dry-run/harness only.
-   `cachyos-installer` has no LUKS key in its headless config; that guest
-   needs a manual partition step or a different installer path.
+1. **GRUB / systemd-boot CachyOS installs** — the non-Limine hook
+   overrides are still dry-run/harness only. (LUKS+Limine is done: the
+   guest's root was converted in place with `./lab rescue`, the wrapper
+   re-applied 10/10 and it boots through `rd.luks.uuid=`; plan 016.)
 2. **Real GPUs** — the VM has none; `nvidia.sh`/`amd-rocm.sh` were only
    dry-run. The dev machine (AMD) can exercise `amd-rocm.sh` for real.
 3. **`omarchy-settings` upgrade through the preserve hook** — the hook is

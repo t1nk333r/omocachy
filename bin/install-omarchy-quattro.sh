@@ -244,7 +244,25 @@ echo "--- Repo + keyring ---"
 
 # Bootstraps trust for the very first transaction that fetches omarchy-keyring
 # itself (its post_install runs pacman-key --populate omarchy from there on).
-run_root pacman-key --recv-keys "$OMARCHY_KEY_ID"
+# A re-apply already has the key, and a keyserver hiccup must not abort it
+# (seen on the CachyOS guest: "keyserver receive failed"); fall back through
+# two public keyservers before giving up (key-fallback idea from
+# jeanmartins7/omarchy-on-cachyos).
+if pacman-key --list-keys "$OMARCHY_KEY_ID" &>/dev/null; then
+    echo "Omarchy packaging key $OMARCHY_KEY_ID already in the pacman keyring."
+elif $DRY_RUN; then
+    run_root pacman-key --recv-keys "$OMARCHY_KEY_ID"
+else
+    key_fetched=false
+    for ks in "" hkps://keyserver.ubuntu.com hkps://keys.openpgp.org; do
+        if run_root pacman-key --recv-keys "$OMARCHY_KEY_ID" ${ks:+--keyserver "$ks"}; then
+            key_fetched=true
+            break
+        fi
+        echo "Warning: could not fetch $OMARCHY_KEY_ID from ${ks:-the default keyserver}; trying the next." >&2
+    done
+    $key_fetched || { echo "Error: could not fetch the Omarchy packaging key from any keyserver." >&2; exit 1; }
+fi
 run_root pacman-key --lsign-key "$OMARCHY_KEY_ID"
 
 if $REPO_ALREADY_PRESENT; then
