@@ -493,6 +493,32 @@ echo "--- Installing omarchy packages ---"
 # direct -Syu through only with OMARCHY_ALLOW_DIRECT_PACMAN=1.
 run_root env OMARCHY_ALLOW_DIRECT_PACMAN=1 pacman -Syu --needed --noconfirm omarchy-settings omarchy omarchy-nvim
 
+# omarchy-apply-system is written against the ISO's package set, not against
+# the omarchy metapackage's dependencies: install/config/enable-services.sh
+# does a bare `systemctl enable cups.service` (also avahi-daemon,
+# docker.socket, power-profiles-daemon, linux-modules-cleanup from
+# kernel-modules-hook) and aborts the whole apply with "Unit cups.service
+# does not exist" on a minimal CachyOS (observed on a fresh CachyOS 260809
+# server-profile install, plan 016). The ISO pacstraps
+# install/omarchy-base.packages first; do the same. That list is the desktop
+# app set only — kernels, drivers and the bootloader live in
+# omarchy-other.packages, which is deliberately not touched.
+OMARCHY_BASE_LIST=/usr/share/omarchy/install/omarchy-base.packages
+if [[ -r $OMARCHY_BASE_LIST ]]; then
+    mapfile -t omarchy_base_pkgs < <(grep -vE '^\s*(#|$)' "$OMARCHY_BASE_LIST")
+    if pacman -Qq tealdeer &>/dev/null; then
+        # Omarchy's tldr conflicts with CachyOS's tealdeer (README §4.2).
+        mapfile -t omarchy_base_pkgs < <(printf '%s\n' "${omarchy_base_pkgs[@]}" | grep -vx tldr)
+        echo "tealdeer is installed; leaving Omarchy's tldr out of the base package set."
+    fi
+    echo "Installing Omarchy's base package set (${#omarchy_base_pkgs[@]} packages from $OMARCHY_BASE_LIST)."
+    run_root env OMARCHY_ALLOW_DIRECT_PACMAN=1 pacman -S --needed --noconfirm "${omarchy_base_pkgs[@]}"
+elif $DRY_RUN; then
+    echo "DRYRUN: install every package listed in $OMARCHY_BASE_LIST (shipped by the omarchy package; tldr skipped when tealdeer is installed)"
+else
+    echo "Warning: $OMARCHY_BASE_LIST not found; omarchy-apply-system may fail enabling services whose packages are absent." >&2
+fi
+
 # ---------------------------------------------------------------------------
 # Apply
 # ---------------------------------------------------------------------------
@@ -604,6 +630,21 @@ run_root sh -c 'test -e "$1" || { mkdir -p "$(dirname "$1")" && printf "[Last]\n
 # ---------------------------------------------------------------------------
 
 seed_user_configs() {
+    # Omarchy's user tools need OMARCHY_PATH (omarchy-plymouth-set:84 dies
+    # with "OMARCHY_PATH: unbound variable" otherwise). A desktop session
+    # gets it from Omarchy's ~/.bashrc, which this very step is about to
+    # install; a fresh CachyOS user (fish or bash) running this over ssh has
+    # nothing. Source Omarchy's own bootstrap rather than hard-coding it.
+    local env_bootstrap=/usr/share/omarchy/default/bash/env-bootstrap
+    if [[ -r $env_bootstrap ]]; then
+        set +u
+        # shellcheck disable=SC1090
+        source "$env_bootstrap"
+        set -u
+    else
+        export OMARCHY_PATH=/usr/share/omarchy
+    fi
+
     if [[ -d /etc/skel ]]; then
         local home_backup_dir="$HOME/.omarchy-quattro-backup-$TIMESTAMP" entry name
         if $DRY_RUN; then
@@ -662,6 +703,9 @@ seed_user_configs() {
         mkdir -p "$fish_conf_dir"
         cat >"$fish_conf_file" <<'EOF'
 # Added by omocachy
+# Omarchy's tools (omarchy-shell, omarchy-plymouth-set, ...) require
+# OMARCHY_PATH; Omarchy only exports it from its bash rc.
+set -q OMARCHY_PATH; or set -gx OMARCHY_PATH /usr/share/omarchy
 if status is-interactive
     command -q mise; and mise activate fish | source
     command -q zoxide; and zoxide init fish | source

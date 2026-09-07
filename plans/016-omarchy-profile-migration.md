@@ -171,14 +171,86 @@ network) unless stated otherwise:
     parked file gone, config valid after a reload. Re-import afterwards
     proved a second run is idempotent and writes its own backup set.
 
+## Validation on real CachyOS (2026-09-07, later the same day)
+
+A second lab checkout (`~/Work/t1nk33r-lab-cachy`, branch `cachyos-guest`)
+taught `./lab` a `LAB_DISTRO=cachyos` guest: the CachyOS desktop ISO
+(260809, sha256 verified against upstream) booted to its live KDE session,
+driven over QMP to run `cachyos-installer --config` headless from a
+`settings.json` on the cidata drive — **minimal** server profile (no
+desktop, NetworkManager, sshd), `linux-cachyos`, btrfs default subvolumes,
+Limine (which pulls `cachyos-snapper-support` + `limine-snapper-sync`), no
+LUKS. Guest facts after install: `ID=cachyos`, kernel 7.2.3-1-cachyos,
+`bootctl` reports Limine 12.7.0, HOOKS `(base systemd autodetect microcode
+kms modconf block keyboard sd-vconsole filesystems)`.
+
+Lab-only workarounds, both recorded in that checkout's `lab`: the target's
+first in-chroot `pacman -Sy` (chwd) reproducibly failed with "cachyos:
+signature from CachyOS is invalid" while the same command a minute later
+passed, so the seed sets `SigLevel = PackageRequired DatabaseNever` for
+`[cachyos]` before installing; and ufw's SSH rate limit is lifted so the
+lab can poll.
+
+What the real run found, and what changed because of it:
+
+1. **`omarchy-apply-system` aborted at `install/config/enable-services.sh`**
+   — `systemctl enable cups.service` → "Unit cups.service does not exist".
+   apply-system is written against the ISO's package set
+   (`install/omarchy-base.packages`), not the `omarchy` metapackage's
+   dependencies. The wrapper now installs that list (minus `tldr` when
+   `tealdeer` is present) before apply-system; `omarchy-other.packages`
+   (kernels, drivers, limine) is deliberately never installed.
+2. **`omarchy-reinstall-configs` died in `omarchy-plymouth-set:84` with
+   `OMARCHY_PATH: unbound variable`.** Omarchy exports it only from its own
+   `~/.bashrc` (via `default/bash/env-bootstrap`), which the seeding step is
+   what installs; a fresh CachyOS user over ssh — or any fish user — has
+   nothing. The wrapper now sources `env-bootstrap` before seeding, and the
+   fish `conf.d/omocachy.fish` exports `OMARCHY_PATH` too.
+3. A debugging artefact worth knowing: a *partial* apply-system run leaves
+   `theme-system.sh`'s Yaru icon files unowned in `/usr/share/icons`, and the
+   next `yaru-icon-theme` install fails on file conflicts. Fresh from
+   snapshot, with the base package set installed first (the ISO's order),
+   this does not occur.
+4. The transformed `zz-cachyos-keep-hooks.conf` **boots**: after the
+   wrapper's initramfs rebuild the guest rebooted straight into Omarchy's
+   SDDM greeter, `ID=cachyos` intact, `sddm` active; login gave a
+   Hyprland 0.56.2 + quickshell 0.3.1 session (`cachy-session.png`).
+5. Wrapper result on the clean guest: all ten assertions PASS, exit 0
+   (`quattro4.log`; the run before it failed only on finding 2 and was
+   resumed by re-running — the re-apply path — which also worked).
+6. **Profile import, online, onto that guest** (this machine's bundle,
+   484 MB `.tar.zst`, `--slim`): configs OK (46 plugins, 25 local-only),
+   **packages PARTIAL** — 2 denied by policy (`linux`, `linux-headers`),
+   63 resolved from configured repos in one transaction of which 60
+   installed, 6 routed to `paru` of which 4 installed; the 3 failures are
+   honest: `pipewire-jack` conflicts with CachyOS's `jack2`, and
+   `chaotic-keyring`/`chaotic-mirrorlist` exist only in the chaotic-aur repo
+   this machine has and CachyOS does not — all three named in
+   `packages-failed.txt`. **mise OK** (`mise install` ran for real).
+   services OK — every unit already enabled, because restoring
+   `~/.config/systemd/user` carries the `*.wants` symlinks. verify OK.
+7. `omocachy-doctor.sh --bundle` on the migrated CachyOS guest: 0 failed,
+   1 warning (the 3 packages above); the CachyOS-specific checks
+   (`ID=cachyos`, `[cachyos*]` repos, HOOKS drop-in, no `/etc/sddm.conf`)
+   all PASS for the first time on a real host.
+8. Screenshots: `cachy-migrated2.png` — the imported profile's own lock
+   screen (idle rule from `shell.json`, big clock, prayer widget) after the
+   idle timeout; `cachy-migrated3.png` — the unlocked desktop with the
+   migrated bar (nettraf, codeburn, sysmon, weather, moon, tray). The first
+   shot also showed a stale Hyprland banner "cannot open hyprland.lua":
+   tar's unlink-then-create replaced files under a live compositor. The
+   importer now runs `hyprctl reload` after the merge when a session is
+   live; `hyprctl configerrors` was empty afterwards.
+
 ## Still unverified (release gates)
 
-- **The CachyOS half remains untested on real CachyOS** — unchanged from plan
-  015 gate 1. The lab can only run an Omarchy guest (`LAB_DISTRO` supports
-  omarchy/debian/fedora), so `install-omarchy-quattro.sh` has still only been
-  dry-run there, and the doctor's CachyOS branches (`ID=cachyos`,
-  `[cachyos*]` repos, the HOOKS drop-in) SKIP on an Omarchy host.
-- **The `packages` and `mise` stages never ran against a network.** Their
-  classification is verified, the transactions are not.
-- **`--restore-host-specific`** and the AUR-helper path are code-reviewed but
-  not executed.
+- **LUKS, GRUB and systemd-boot CachyOS installs** — the lab guest is
+  Limine, unencrypted. The `sd-encrypt` transform and the non-Limine hook
+  overrides are exercised only by the dry-run and the transform harness.
+- **Real GPUs** — the VM reports vendor `none`; `nvidia.sh`/`amd-rocm.sh`
+  ran only as dry-run here.
+- **`--restore-host-specific`** is code-reviewed but not executed.
+- The CachyOS lab guest itself (`LAB_DISTRO=cachyos`) lives on the
+  `cachyos-guest` branch of a second lab checkout; the driver's 90 s
+  live-desktop wait and the launch keystrokes are measured on this host
+  once, not hardened.

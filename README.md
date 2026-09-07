@@ -107,9 +107,15 @@ the confirmation prompt (safe to combine with `--dry-run`).
    `SigLevel = Required DatabaseOptional` (the stable channel signs every
    package but not the repo database) and imports/locally signs the Omarchy
    packaging key.
-2. Backs up and pre-arms everything the next two steps would clobber (see
-   the guarantees below), then installs `omarchy-settings`, `omarchy`, and
-   `omarchy-nvim` via `pacman -Syu --needed`.
+2. Backs up and pre-arms everything the next steps would clobber (see the
+   guarantees below), then installs `omarchy-settings`, `omarchy`, and
+   `omarchy-nvim` via `pacman -Syu --needed`, followed by Omarchy's own
+   `install/omarchy-base.packages` list (the desktop app set the ISO
+   pacstraps — `cups`, `avahi`, `docker`, `power-profiles-daemon`, ...).
+   `omarchy-apply-system` is written against that set: on a minimal CachyOS
+   it otherwise aborts at `systemctl enable cups.service`. `tldr` is left out
+   when CachyOS's `tealdeer` is installed (§4.2). Kernels, drivers and the
+   bootloader live in `omarchy-other.packages`, which is never installed.
 3. Runs `omarchy-apply-system --install-user "$USER" --first-install` as
    root — Omarchy's own config/hardware/login/post-install stages.
 4. Restores CachyOS state, writes the SDDM login state, and — unless
@@ -117,9 +123,12 @@ the confirmation prompt (safe to combine with `--dry-run`).
    pre-existing (non-`useradd`-created) user: `omarchy-reinstall-configs`
    (resyncs shipped defaults from `/etc/skel`) then `omarchy-provision-user
    --first-install` (run in Omarchy's first-boot context so it does not
-   abort looking for the ISO's bundled Node tarball).
-5. Writes the Fish integration file (mise + zoxide), dispatches GPU setup
-   (see §5), rebuilds the initramfs once, and runs the assertion suite.
+   abort looking for the ISO's bundled Node tarball), with Omarchy's own
+   `env-bootstrap` sourced first so `OMARCHY_PATH` is set even though your
+   shell has never seen Omarchy's `.bashrc`.
+5. Writes the Fish integration file (`OMARCHY_PATH`, mise, zoxide),
+   dispatches GPU setup (see §5), rebuilds the initramfs once, and runs the
+   assertion suite.
 
 **Reconciliation guarantees.** Omarchy's install stages are safe on a stock
 Omarchy machine but destructive on CachyOS if left alone. Each of these was
@@ -211,12 +220,15 @@ with `omarchy update`, or set `OMARCHY_ALLOW_DIRECT_PACMAN=1` in the
 environment of the upgrade command. The wrapper prints this reminder when it
 finishes and uses the same variable for its own re-runs.
 
-**Status: not yet validated on a real CachyOS host.** Every guarantee above
-is grounded in the installed 4.0.2 package contents and exercised by
-`--dry-run` and a hook-transform harness, but the wrapper has so far only run
-for real on the maintainers' Omarchy-ISO machine (re-apply path). Treat the
-first CachyOS run as a test: take a snapshot, read the dry-run, keep a live
-USB handy.
+**Status: validated on one real CachyOS install** (2026-09-07, plan 016): a
+fresh CachyOS 260809 "minimal" (server profile, no desktop) VM with btrfs,
+Limine, snapper and the systemd initramfs, no LUKS. The wrapper ran end to
+end with all ten assertions passing, the machine rebooted through the
+transformed HOOKS drop-in into Omarchy's SDDM greeter with `ID=cachyos`
+intact, and a Hyprland/Quickshell session came up. Not yet covered: a LUKS
+install, GRUB/systemd-boot, and real GPUs (the VM has none). Treat your own
+first run accordingly: take a snapshot, read the dry-run, keep a live USB
+handy.
 
 ## 4. How CachyOS/Omarchy Conflicts Are Resolved
 

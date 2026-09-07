@@ -224,6 +224,17 @@ stage_configs() {
         write_rollback
         echo "    backed up $backed existing paths, added $fresh new ones"
         echo "    rollback: $BACKUP_DIR/rollback.sh"
+        # tar replaces files by unlink+create; a live Hyprland watching
+        # ~/.config/hypr can reload inside that window and keep showing
+        # "cannot open hyprland.lua" until the next reload (seen on the
+        # CachyOS guest, plan 016). Reload once the merge is complete.
+        if [[ -z ${HYPRLAND_INSTANCE_SIGNATURE:-} ]]; then
+            newest_hypr="$(find "${XDG_RUNTIME_DIR:-/run/user/$UID}/hypr" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %f\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2)"
+            [[ -n $newest_hypr ]] && export HYPRLAND_INSTANCE_SIGNATURE="$newest_hypr"
+        fi
+        if have hyprctl && hyprctl -j version &>/dev/null; then
+            hyprctl reload >/dev/null 2>&1 && echo "    reloaded the running Hyprland"
+        fi
     fi
     record_stage configs OK
 }

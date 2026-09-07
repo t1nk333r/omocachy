@@ -14,7 +14,7 @@ per-item debloater:
 
 | Component | Script | State |
 |---|---|---|
-| Omarchy 4 "Quattro" package wrapper | `bin/install-omarchy-quattro.sh` | Reconciled against installed 4.0.2 (plan 015), dry-run-verified, **not yet run for real on CachyOS** |
+| Omarchy 4 "Quattro" package wrapper | `bin/install-omarchy-quattro.sh` | Reconciled against installed 4.0.2 (plan 015); **ran end to end on a real CachyOS 260809 minimal/Limine guest, rebooted into Omarchy** (plan 016). LUKS, GRUB, real GPUs still open |
 | v4 per-item debloat picker | `bin/debloat-quattro.sh` | Built, mock-verified, needs real-v4 TUI run |
 | Profile migration (export → import → doctor) | `bin/omocachy-profile-export.sh`, `bin/omocachy-profile-import.sh`, `bin/omocachy-doctor.sh` | Plan 016. Exercised end-to-end for real in the lab VM (export, import onto a pristine guest, screenshot, `./lab test` green, rollback, re-import). `packages`/`mise` stages verified only in classification/offline paths |
 | Shared helpers | `bin/lib/common.sh`, `bin/lib/profile.sh`, `share/profile-paths.conf` | `common.sh` is the installer's own dry-run contract, extracted verbatim (dry-run output byte-identical); `profile.sh` owns bundle schema 1 and the exclude/secret/package policies |
@@ -91,31 +91,37 @@ root-equivalent; secrets in `.env`, unrecoverable, never commit or print):
 - The repo's `Jenkinsfile` is a faithful port of the old lint workflow
   (agent label `docker`; `Dockerfile.agent` already ships shellcheck).
 
+## Where validation stands
+
+Plan 016 (2026-09-07) closed the two big gates on a real CachyOS guest —
+`~/Work/t1nk33r-lab-cachy` (branch `cachyos-guest`, `LAB_DISTRO=cachyos`,
+CachyOS 260809 minimal/Limine/btrfs+snapper/no LUKS): the Quattro wrapper
+ran end to end (10/10 assertions), the guest rebooted through the
+transformed HOOKS into Omarchy's SDDM greeter with `ID=cachyos` intact, and
+the profile import ran online (packages + mise for real) with a screenshot
+of the migrated Quickshell bar. Two real-host bugs were found and fixed on
+the way: apply-system needs `omarchy-base.packages` installed first, and
+the user seeding needs Omarchy's `env-bootstrap` sourced (`OMARCHY_PATH`).
+Details and evidence: the plan file.
+
 ## Release gates (the honest "not done" list)
 
-1. **Real CachyOS validation of the Quattro wrapper** — dry-run proved
-   the command plan and the rendered files, never the outcome. Wanted: one
-   GRUB+LUKS VM, one Limine+LUKS VM (systemd initramfs, `rd.luks.uuid=`),
-   fresh CachyOS each; run once with `--skip-user-configs` (dotfiles-managed
-   home) and once without. Specifically confirm: the transformed
-   `zz-cachyos-keep-hooks.conf` boots; `limine-snapper-sync` accepts
-   `TARGET_OS_NAME="CachyOS"`; `/etc/os-release` stays `ID=cachyos` across
-   an `omarchy-settings` upgrade (preserve hook); SDDM shows the remembered
-   user; `pacman -Qkk limine-mkinitcpio-hook` matches the assertion. The
-   dev machine (Omarchy ISO install, Limine+LUKS+AMD, udev initramfs) can
-   only exercise the re-apply path.
-2. **Real interactive run of `bin/debloat-quattro.sh` on a v4 machine**
-   (same VM gate) — enumeration/dry-run are mock-verified only.
-3. **Profile migration against a network** (plan 016): the importer's
-   `packages` and `mise` stages have run only in their classification and
-   offline paths. Wanted: one online CachyOS target, `--only packages,mise`,
-   confirming the pacman transaction, the paru/yay fallback for names no
-   configured repo has, and `mise install`. `--restore-host-specific` and
-   the AUR-helper branch are code-reviewed, not executed.
-4. **Jenkins agent secret** (above) — then confirm a green build on push.
-5. Backlog seeds, if wanted: opt-in debloat prompt inside the Quattro
-   wrapper (deliberately deferred until gate 1 passes); teach the lab a
-   `LAB_DISTRO=cachyos` guest so gates 1 and 3 stop needing hardware.
+1. **LUKS and non-Limine CachyOS installs** — the lab guest is Limine and
+   unencrypted, so the `sd-encrypt` transform (`rd.luks.uuid=` boots) and
+   the GRUB/systemd-boot hook overrides are still dry-run/harness only.
+   `cachyos-installer` has no LUKS key in its headless config; that guest
+   needs a manual partition step or a different installer path.
+2. **Real GPUs** — the VM has none; `nvidia.sh`/`amd-rocm.sh` were only
+   dry-run. The dev machine (AMD) can exercise `amd-rocm.sh` for real.
+3. **`omarchy-settings` upgrade through the preserve hook** — the hook is
+   installed and the first-install restore verified; an actual upgrade
+   transaction has not fired it yet.
+4. **Real interactive run of `bin/debloat-quattro.sh`** on the CachyOS guest
+   — enumeration/dry-run are mock-verified only.
+5. **Jenkins agent secret** (above) — then confirm a green build on push.
+6. Backlog: opt-in debloat prompt inside the wrapper; harden the lab's
+   CachyOS driver (fixed 90 s wait, typed launch line) and merge
+   `cachyos-guest` into the main lab checkout.
 
 ## Fast orientation for an agent
 
