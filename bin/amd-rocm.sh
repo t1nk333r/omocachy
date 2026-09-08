@@ -1,27 +1,39 @@
 #!/bin/bash
-set -e
+set -euo pipefail
+
+# --- AMD configuration for Omarchy on CachyOS ---
+# Installs the AMDGPU driver profile via chwd plus the ROCm runtime and the
+# VA-API utilities. VA-API only: Mesa removed VDPAU upstream (Sept 2025), so
+# mesa-vdpau/VDPAU_DRIVER must never come back here (plan 008).
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=bin/lib/common.sh
+source "$SCRIPT_DIR/lib/common.sh"
+
+DRY_RUN=false
+[[ ${1:-} == --dry-run ]] && DRY_RUN=true
 
 # 1. Get AMD GPU ID
-GPU_ID=$(lspci -nn -d 1002: | grep -E "VGA|3D" | head -n1 | grep -oP '(?<=\[1002:)[0-9a-fA-F]{4}(?=\])')
+GPU_ID=$(lspci -nn -d 1002: | grep -E "VGA|3D" | head -n1 | sed -n 's/.*\[1002:\([0-9a-fA-F]\{4\}\)\].*/\1/p')
 
-if [[ -z "$GPU_ID" ]]; then
-    echo "No AMD GPU found. Skipping."
+if [[ -z $GPU_ID ]]; then
+    info "No AMD GPU found. Skipping."
     exit 0
 fi
 
-echo "[*] Found AMD GPU ID: $GPU_ID"
+info "Found AMD GPU ID: $GPU_ID"
 
 # 2. Leftover NVIDIA packages are inert on an AMD-only machine; forced
 # removal risks breaking hybrid AMD+NVIDIA systems, and chwd's amd profile
 # needs no removals (see plan 007).
 
 # 3. Install AMD driver profile via chwd
-echo "[*] Installing AMD AMDGPU driver profile..."
-sudo chwd -i amd
+info "Installing AMD AMDGPU driver profile..."
+run_root chwd -i amd
 
 # 4. Install ROCm runtime + VA-API utils
-echo "[*] Installing ROCm and VA-API packages..."
-sudo pacman -S --needed --noconfirm rocm-core rocm-hip-runtime rocm-smi-lib libva-utils
+info "Installing ROCm and VA-API packages..."
+run_root pacman -S --needed --noconfirm rocm-core rocm-hip-runtime rocm-smi-lib libva-utils
 
 # 5. Session environment for ROCm. ~/.config/uwsm/env is the user's own file
 # (often dotfile-managed), so it is never appended to. uwsm also sources
@@ -35,10 +47,9 @@ export LIBVA_DRIVER_NAME=radeonsi
 export ROCM_HOME=/opt/rocm
 export PATH=$ROCM_HOME/bin:$PATH'
 if [[ ${OMOCACHY_SKIP_USER_CONFIGS:-0} == 1 ]]; then
-    echo "[*] --skip-user-configs: not writing $GPU_ENV_FILE. Recommended session environment (add to your own uwsm env or env.d file):"
+    info "--skip-user-configs: not writing $GPU_ENV_FILE. Recommended session environment (add to your own uwsm env or env.d file):"
     printf '%s\n' "$GPU_ENV_CONTENT"
 else
-    mkdir -p "$(dirname "$GPU_ENV_FILE")"
-    printf '%s\n' "$GPU_ENV_CONTENT" >"$GPU_ENV_FILE"
-    echo "[*] AMD ROCm session environment written to $GPU_ENV_FILE"
+    printf '%s\n' "$GPU_ENV_CONTENT" | write_user_file "$GPU_ENV_FILE"
+    info "AMD ROCm session environment written to $GPU_ENV_FILE"
 fi
