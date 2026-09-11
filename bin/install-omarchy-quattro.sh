@@ -728,8 +728,17 @@ check_limine_hook_pkg() {
     [[ -z "$(pacman -Qkk limine-mkinitcpio-hook 2>&1 >/dev/null | grep '^warning: ' || true)" ]]
 }
 check_hookdir_override() {
+    # Checked before the Limine early-return: naming any HookDir replaces
+    # pacman's /etc/pacman.d/hooks default, and the os-release preserve hook
+    # lives in that directory. A file that declares one HookDir but not the
+    # stock directory silently stops running it on every bootloader -- the
+    # same breakage the non-Limine override exists to avoid -- so this is a
+    # property of the pacman.conf, not of which bootloader is active. A file
+    # with no HookDir line at all is fine (the default still applies).
+    if grep -qE '^[[:space:]]*HookDir[[:space:]]*=' /etc/pacman.conf; then
+        grep -qxF "HookDir = $PACMAN_HOOK_DIR/" /etc/pacman.conf || return 1
+    fi
     [[ $BOOTLOADER != "limine" ]] || return 0
-    grep -qxF "HookDir = $PACMAN_HOOK_DIR/" /etc/pacman.conf || return 1
     grep -qxF "HookDir = $OMOCACHY_HOOK_DIR/" /etc/pacman.conf || return 1
     [[ -f $OMOCACHY_HOOK_DIR/90-mkinitcpio-install.hook ]] || return 1
     grep -q '/usr/share/libalpm/scripts/mkinitcpio install' "$OMOCACHY_HOOK_DIR/90-mkinitcpio-install.hook" || return 1
