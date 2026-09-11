@@ -280,6 +280,21 @@ run_units() {
     printf '%s\n' '{"plugins":[{"id":"foo.bar"},{"id":"omarchy.builtin"}]}' >"$d/shell.json"
     out="$( source "$REPO_DIR/bin/lib/profile.sh"; profile_shelljson_plugin_ids "$d/shell.json" )"
     expect_eq "profile_shelljson_plugin_ids: builtins filtered out" "foo.bar" "$out"
+
+    # 5. The snapper assertion must never return success without comparing
+    # something. In --verify-only no backup is taken, so the pre-fix body
+    # short-circuited to success and printed PASS having compared nothing. The
+    # wrapper runs top-level code, so the helper cannot be sourced and the
+    # assertion suite cannot run under a fixture sysroot; pin the source shape
+    # instead -- the on-disk fallback and the explicit note are present, and the
+    # old `[[ -z $SNAPPER_BACKUP ]] ||` short-circuit is gone.
+    out="$(sed -n '/^check_snapper()/,/^}/p' "$REPO_DIR/bin/install-omarchy-quattro.sh")"
+    if [[ $out == *'omarchy-quattro-backup-*'* && $out == *'cmp -s'* \
+        && $out == *'not verified'* && $out != *'[[ -z $SNAPPER_BACKUP ]] ||'* ]]; then
+        ok "check_snapper: compares an on-disk backup or reports it cannot verify"
+    else
+        bad "check_snapper: compares an on-disk backup or reports it cannot verify" "$out"
+    fi
 }
 
 # ---------------------------------------------------------------------------

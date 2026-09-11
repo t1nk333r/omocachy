@@ -774,7 +774,20 @@ check_sddm_conf() {
     [[ ! -f /etc/sddm.conf ]]
 }
 check_snapper() {
-    [[ -z $SNAPPER_BACKUP ]] || cmp -s "$SNAPPER_BACKUP" "$SNAPPER_CONFIG"
+    # --verify-only never takes a backup, so $SNAPPER_BACKUP is empty there and
+    # the old form returned success whenever no backup had been taken, printing
+    # PASS for a check that had compared nothing. Fall back to the newest backup
+    # a previous full run left on disk.
+    local backup="$SNAPPER_BACKUP" newest
+    if [[ -z $backup ]]; then
+        newest="$(ls -1t /etc/snapper/configs/root.omarchy-quattro-backup-* 2>/dev/null | head -n1 || true)"
+        if [[ -z $newest ]]; then
+            echo "      (no pre-install snapper backup on this machine to compare against; not verified)"
+            return 0
+        fi
+        backup="$newest"
+    fi
+    cmp -s "$backup" "$SNAPPER_CONFIG"
 }
 check_update_guard() {
     # Not a failure -- an expectation. The omarchy package installs this
