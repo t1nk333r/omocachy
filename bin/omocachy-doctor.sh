@@ -243,50 +243,68 @@ if [[ -n $BUNDLE ]]; then
     echo "--- versus bundle ---"
     echo "bundle: $BUNDLE ($(profile_manifest "$BUNDLE" .source.host), $(profile_manifest "$BUNDLE" .created))"
 
-    missing_plugins=()
-    while IFS= read -r id; do
-        [[ -z $id ]] && continue
-        [[ -d "$PLUGIN_DIR/$id" ]] || missing_plugins+=("$id")
-    done < <(profile_manifest "$BUNDLE" '.plugins[].id')
-    if ((${#missing_plugins[@]})); then
-        fail "${#missing_plugins[@]} plugin(s) from the bundle are not on this machine:"
-        printf '        %s\n' "${missing_plugins[@]}" >&2
+    # A truncated, half-copied or hand-written manifest makes jq stream
+    # nothing, and every check below then falls through to a PASS — the plugin
+    # one included, which is the check this file exists for. Grade a bundle
+    # only when its manifest is readable and holds the arrays those checks
+    # walk; `packages` is the export's object of explicit_native/
+    # explicit_foreign lists, not a flat array.
+    if ! jq -e '
+        .schema == 1
+        and (.payload.captured | type == "array")
+        and (.plugins | type == "array")
+        and (.packages | type == "object")
+        and (.packages.explicit_native | type == "array")
+        and (.packages.explicit_foreign | type == "array")
+        and (.services.user_enabled | type == "array")
+    ' "$BUNDLE/manifest.json" >/dev/null 2>&1; then
+        fail "bundle manifest is missing, unreadable or not schema 1: $BUNDLE/manifest.json"
     else
-        pass "every plugin in the bundle is present on this machine"
+        missing_plugins=()
+        while IFS= read -r id; do
+            [[ -z $id ]] && continue
+            [[ -d "$PLUGIN_DIR/$id" ]] || missing_plugins+=("$id")
+        done < <(profile_manifest "$BUNDLE" '.plugins[].id')
+        if ((${#missing_plugins[@]})); then
+            fail "${#missing_plugins[@]} plugin(s) from the bundle are not on this machine:"
+            printf '        %s\n' "${missing_plugins[@]}" >&2
+        else
+            pass "every plugin in the bundle is present on this machine"
+        fi
+
+        # Local-only plugins exist nowhere else: if one of those is missing the
+        # bundle is the only copy, so call it out separately.
+        lost=0
+        while IFS= read -r id; do
+            [[ -z $id ]] && continue
+            [[ -d "$PLUGIN_DIR/$id" ]] || lost=$((lost + 1))
+        done < <(profile_manifest "$BUNDLE" '.plugins[] | select(.kind == "local") | .id')
+        ((lost == 0)) && pass "all local-only (unpublished) plugins restored" ||
+            fail "$lost local-only plugin(s) missing — nothing but this bundle has them"
+
+        installed="$WORK/installed.txt"
+        pacman -Qq 2>/dev/null | sort >"$installed"
+        absent=0
+        denied=0
+        while IFS= read -r pkg; do
+            [[ -z $pkg ]] && continue
+            grep -qxF "$pkg" "$installed" && continue
+            if profile_pkg_denied "$pkg" >/dev/null; then denied=$((denied + 1)); else absent=$((absent + 1)); fi
+        done < <(profile_manifest "$BUNDLE" '.packages.explicit_native[], .packages.explicit_foreign[]')
+        if ((absent == 0)); then
+            pass "every non-policy-denied explicit package from the bundle is installed ($denied denied by policy)"
+        else
+            soft "$absent explicit package(s) from the bundle are not installed here ($denied more denied by policy) — 'omocachy-profile-import.sh --only packages'"
+        fi
+
+        missing_units=0
+        while IFS= read -r unit; do
+            [[ -z $unit ]] && continue
+            systemctl --user is-enabled --quiet "$unit" 2>/dev/null || missing_units=$((missing_units + 1))
+        done < <(profile_manifest "$BUNDLE" '.services.user_enabled[]')
+        ((missing_units == 0)) && pass "every user unit enabled on the source is enabled here" ||
+            soft "$missing_units user unit(s) enabled on the source are not enabled here (their packages may be missing)"
     fi
-
-    # Local-only plugins exist nowhere else: if one of those is missing the
-    # bundle is the only copy, so call it out separately.
-    lost=0
-    while IFS= read -r id; do
-        [[ -z $id ]] && continue
-        [[ -d "$PLUGIN_DIR/$id" ]] || lost=$((lost + 1))
-    done < <(profile_manifest "$BUNDLE" '.plugins[] | select(.kind == "local") | .id')
-    ((lost == 0)) && pass "all local-only (unpublished) plugins restored" ||
-        fail "$lost local-only plugin(s) missing — nothing but this bundle has them"
-
-    installed="$WORK/installed.txt"
-    pacman -Qq 2>/dev/null | sort >"$installed"
-    absent=0
-    denied=0
-    while IFS= read -r pkg; do
-        [[ -z $pkg ]] && continue
-        grep -qxF "$pkg" "$installed" && continue
-        if profile_pkg_denied "$pkg" >/dev/null; then denied=$((denied + 1)); else absent=$((absent + 1)); fi
-    done < <(profile_manifest "$BUNDLE" '.packages.explicit_native[], .packages.explicit_foreign[]')
-    if ((absent == 0)); then
-        pass "every non-policy-denied explicit package from the bundle is installed ($denied denied by policy)"
-    else
-        soft "$absent explicit package(s) from the bundle are not installed here ($denied more denied by policy) — 'omocachy-profile-import.sh --only packages'"
-    fi
-
-    missing_units=0
-    while IFS= read -r unit; do
-        [[ -z $unit ]] && continue
-        systemctl --user is-enabled --quiet "$unit" 2>/dev/null || missing_units=$((missing_units + 1))
-    done < <(profile_manifest "$BUNDLE" '.services.user_enabled[]')
-    ((missing_units == 0)) && pass "every user unit enabled on the source is enabled here" ||
-        soft "$missing_units user unit(s) enabled on the source are not enabled here (their packages may be missing)"
 fi
 
 echo ""

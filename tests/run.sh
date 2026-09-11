@@ -544,6 +544,21 @@ run_guard() {
         awk -F'\t' '$1 == "thing" { print $3 }')"
     expect_eq "plugin rows: the recorded remote keeps no userinfo" \
         "https://example.invalid/thing.git" "$row"
+
+    # 5. The reader's side of the same boundary. The doctor grades this machine
+    # against the bundle's lists, so a manifest it cannot read must not be
+    # graded at all: jq streams nothing out of an empty one and every check
+    # fell through to PASS, the plugin check included.
+    mkdir -p "$d/doctor/bundle"
+    printf '{}\n' >"$d/doctor/bundle/manifest.json"
+    out="$d/doctor/out"
+    bash "$REPO_DIR/bin/omocachy-doctor.sh" --bundle "$d/doctor/bundle" >"$out" 2>&1
+    rc=$?
+    expect_eq "doctor: an unreadable manifest exits 1" "1" "$rc"
+    expect_contains "doctor: the unreadable manifest is named" \
+        "bundle manifest is missing, unreadable or not schema 1: $d/doctor/bundle/manifest.json" "$(cat "$out")"
+    expect_eq "doctor: the unreadable manifest is not graded" "no" \
+        "$(grep -qF 'every plugin in the bundle is present' "$out" && echo yes || echo no)"
 }
 
 # ---------------------------------------------------------------------------
