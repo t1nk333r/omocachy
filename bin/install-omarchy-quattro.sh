@@ -312,10 +312,17 @@ fi
 # 4.0.3-1; the baseline names the release 4.0.2, and the fixture sysroots
 # carry 4.0.2-1), and say so rather than letting a clean run imply the newer
 # release was audited too.
-if installed_omarchy_version="$(pkg_version omarchy-settings)" \
-    && [[ -n $installed_omarchy_version && ${installed_omarchy_version%%-*} != "$OMARCHY_RECONCILED_VERSION" ]]; then
-    echo "Warning: this wrapper was reconciled against Omarchy $OMARCHY_RECONCILED_VERSION; this machine has $installed_omarchy_version. Re-read plans/016-*.md's verification steps before trusting the reconciliation." >&2
-fi
+OMARCHY_DRIFT_WARNED=false
+warn_omarchy_drift() {
+    $OMARCHY_DRIFT_WARNED && return 0
+    local installed_omarchy_version
+    if installed_omarchy_version="$(pkg_version omarchy-settings)" \
+        && [[ -n $installed_omarchy_version && ${installed_omarchy_version%%-*} != "$OMARCHY_RECONCILED_VERSION" ]]; then
+        echo "Warning: this wrapper was reconciled against Omarchy $OMARCHY_RECONCILED_VERSION; this machine has $installed_omarchy_version. Re-read plans/016-*.md's verification steps before trusting the reconciliation." >&2
+        OMARCHY_DRIFT_WARNED=true
+    fi
+}
+warn_omarchy_drift
 
 # ---------------------------------------------------------------------------
 # Bootloader detection.
@@ -1416,6 +1423,13 @@ echo "Also installing the ISO package closure: ${OMARCHY_ISO_CLOSURE[*]}"
 run_root env OMARCHY_ALLOW_DIRECT_PACMAN=1 pacman -Syu --needed --noconfirm \
     omarchy-settings omarchy omarchy-nvim "${OMARCHY_ISO_CLOSURE[@]}"
 decide iso_closure "${OMARCHY_ISO_CLOSURE[*]}"
+
+# The startup drift check runs before the packages exist on a fresh host, so it
+# can never fire for the very run that installs an off-baseline release
+# (observed 2026-09-11: the fresh GRUB guest installed omarchy-settings 4.0.3-1
+# and printed no warning). Re-check now that the installed version is readable;
+# the helper warns once per run, so the re-apply path stays quiet here.
+warn_omarchy_drift
 
 # ---------------------------------------------------------------------------
 # Omarchy's base package list

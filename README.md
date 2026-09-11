@@ -279,17 +279,24 @@ every unit and command the apply stages call must exist, or the wrapper stops
 and names the missing package instead of letting `omarchy-apply-system` die
 halfway.
 
-**ssh survives the install.** Omarchy's `install/config/firewall.sh` runs
+**ssh survives the install.** Omarchy's `install/config/firewall.sh` sets
 `ufw default deny incoming`, flips `ENABLED=yes` and enables the unit, with
-**no ssh allowance at all**. The rules load into the running kernel as they
-are written, so on the guest an ssh session died mid-apply — before any
-reboot, recovery needed the hypervisor console. Anyone layering Omarchy onto a
-remote CachyOS box would lose the box. So, before the apply, the wrapper reads
-the port(s) from `/etc/ssh/sshd_config` *and* `/etc/ssh/sshd_config.d/*.conf`
-and runs `ufw allow <port>/tcp` for each, printing a loud line saying it did —
-but only when an sshd is actually enabled. With no sshd it opens nothing and
-says so, warning that ufw will still come up deny-incoming. Everything else
-you expose still needs its own `ufw allow`.
+**no ssh allowance at all**. On omarchy 4.0.3 that script deliberately leaves
+the *live* firewall untouched — its own comment says installs are followed by
+a reboot, so it configures ufw to start on the installed system instead of
+mutating the install session's firewall; verified on the fresh guest
+2026-09-11 (`ufw.service` enabled but `Active: inactive (dead)`, `ufw status`
+inactive, no `ufw-user-input` chain in the running kernel). Earlier releases
+did apply rules as they were written, and on the then-current guest an ssh
+session died mid-apply — before any reboot, recovery needed the hypervisor
+console. Either way the reboot turns that deny-incoming firewall on, and
+anyone layering Omarchy onto a remote CachyOS box would lose the box. So,
+before the apply, the wrapper reads the port(s) from `/etc/ssh/sshd_config`
+*and* `/etc/ssh/sshd_config.d/*.conf` and runs `ufw allow <port>/tcp` for
+each, printing a loud line saying it did — but only when an sshd is actually
+enabled. With no sshd it opens nothing and says so, warning that ufw will
+still come up deny-incoming. Everything else you expose still needs its own
+`ufw allow`.
 
 **`omarchy update` works on a `--skip-user-configs` host.** `omarchy update`
 calls `omarchy-update-dev`, whose line 7 dereferences `$OMARCHY_PATH` under
@@ -334,7 +341,10 @@ the `HookDir` override in place on non-Limine machines; `limine-snapper-sync`
 disabled there; `/etc/default/limine` carrying the `ENABLE_UKI`/`BOOT_ORDER`
 (and, on CachyOS, `TARGET_OS_NAME`) overrides on a Limine host; `sddm` and
 `NetworkManager` enabled; no `/etc/sddm.conf`; the snapper config matching its
-backup; the update-guard hook installed; and the `omarchy` CLI present.
+backup — *where a pre-install backup existed*: on a first install there is
+nothing to compare, and the suite's annotation says so instead of implying the
+guarantee was checked; the update-guard hook installed; and the `omarchy` CLI
+present.
 
 Run that suite again at any time with `--verify-only`, which installs and
 changes nothing (its transcript goes to `/tmp`):
