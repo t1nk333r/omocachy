@@ -180,6 +180,27 @@ systemd initramfs).
   passwordless VNC console on 127.0.0.1:5905, which `~/Work/novnc/serve.sh`
   serves to a browser on 127.0.0.1:6080 (no root needed; `websockify` is a
   user-level uv tool).
+- **Gate leftovers cleared in labs** (2026-09-11, later the same day): a kernel
+  *package* transaction on the systemd-boot guest rebuilt the initramfs through
+  the PATH-pinned override — libalpm's `--debug` names the hook file it parses
+  and the two same-named hooks it skips, the initramfs mtime moved (20:19:38 →
+  22:10:40), and the `check_no_limine_artifacts` glob stayed empty (gate 1);
+  `--skip-user-configs` on a fresh GRUB guest skipped exactly the four named
+  steps, left `$HOME` with no `.config` at all, put its transcript in `/tmp`,
+  and still finished 19 PASS / 0 FAIL with the GPU session env printed rather
+  than written (gate 1); a real `omarchy-settings` 4.0.2-1 → 4.0.3-1 upgrade ran
+  the package's destructive etc-overrides scriptlet and
+  `zz-cachyos-preserve-etc.hook` in the same transaction, while the control run
+  with the hook made unreachable left `ID=omarchy` and Omarchy's nsswitch — the
+  hook is load-bearing (gate 4); the picker's two untested paths are covered by
+  mutation-checked cases (gate 5, `ea936fc`); and the drift guard, which could
+  never fire on the run that introduces an off-baseline release, now re-checks
+  after the package step and warns exactly once on both paths (`3875490`). Three
+  README claims were corrected against the same evidence: the ufw mechanism on
+  omarchy 4.0.3 (the live firewall is deliberately *not* touched; the wrapper's
+  pre-allowance is still what makes the post-reboot firewall survive ssh), the
+  snapper assertion being vacuous without a pre-install backup, and the drift
+  baseline's reach.
 - **`bin/debloat-quattro.sh`, driven interactively** (2026-09-11, the Omarchy 4
   guest): the picker ran on the desktop — one package removed through
   `omarchy-pkg-drop` (pacman transaction + snapper snapshots), one web app
@@ -197,15 +218,18 @@ systemd initramfs).
 
 ## Release gates (the honest "not done" list)
 
-1. **The plan-017 fixes were re-run on a guest** (2026-09-11, the systemd-boot
-   guest): the ISO package closure (now including `xdg-user-dirs`, `mise` and
-   `chromium`), the ufw ssh allowance and the `/etc/environment` `OMARCHY_PATH`
-   write all assert PASS in the same run, and the shadow `HookDir` override was
-   exercised inside a live pacman transaction (`pacman -Qkk
-   limine-mkinitcpio-hook` stays clean). Re-run on the Limine guest too (see
-   §Where validation stands) — the `TARGET_OS_NAME`/`limine-snapper-sync` item
-   below is now exercised. Still fixture-only: an initramfs rebuild triggered by
-   a kernel upgrade, and a `--skip-user-configs` run on a fresh guest.
+1. **Closed 2026-09-11.** The plan-017 fixes were re-run on the systemd-boot
+   guest and on the Limine guest: the ISO package closure (now including
+   `xdg-user-dirs`, `mise-bin` and `chromium`), the ufw ssh allowance and the
+   `/etc/environment` `OMARCHY_PATH` write all assert PASS in the same run, and
+   the shadow `HookDir` override was exercised inside a live pacman
+   transaction. The two items that were still fixture-only were then cleared in
+   labs the same day: an initramfs rebuild triggered by a **kernel package
+   transaction** (libalpm `--debug` shows it parsing
+   `/etc/pacman.d/hooks-omocachy/90-mkinitcpio-install.hook` and *skipping* both
+   same-named hooks, the initramfs mtime moved, no Limine artefacts), and
+   `--skip-user-configs` on a **fresh** GRUB guest (four named steps skipped,
+   `$HOME` untouched, transcript in `/tmp`, still 19 PASS / 0 FAIL).
 2. **systemd-boot CachyOS machine** — run for real on 2026-09-11 on a guest
    converted from GRUB: detection, the hook policy, the initramfs rebuild, the
    post-install assertion suite (19 PASS / 0 FAIL) and `--verify-only` after a
@@ -219,15 +243,24 @@ systemd initramfs).
    luna, and the station is AMD too (the profile bundle exported 2026-09-11
    records `GPU vendor | amd`). If an NVIDIA machine ever appears, that gate
    half is one `bin/nvidia.sh` run plus the browser-decode notes in README §5.1.
-4. **`omarchy-settings` upgrade through the preserve hook** — installed and
-   the first-install restore verified; no upgrade transaction has fired the
-   hook yet.
-5. **Real interactive run of `bin/debloat-quattro.sh`** — done 2026-09-11 on
-   the Omarchy 4 guest (one package, one web app, one agent CLI stub removed;
-   §Where validation stands). The empty-category bug the run exposed is fixed
-   (plan 038) with a stub-`gum` regression case. Not yet exercised: submitting
-   every category empty in one run (the "nothing selected" exit), and the
-   ownership guard refusing a file it does not own.
+4. **Closed 2026-09-11.** A real `omarchy-settings` **upgrade** transaction
+   (4.0.2-1 → 4.0.3-1, fired by the wrapper's own `pacman -Syu` on the Limine
+   guest) ran the package's deliberately destructive `_etc_overrides_apply()`
+   scriptlet — it `rm -f`s and replaces `/etc/os-release` and
+   `/etc/nsswitch.conf` on every install/upgrade — and
+   `/etc/pacman.d/hooks/zz-cachyos-preserve-etc.hook` in the same transaction,
+   so `ID=cachyos` and CachyOS's nsswitch survived and the suite passed 19/0.
+   The control run with the hook deliberately unreachable leaves `ID=omarchy`,
+   `PRETTY_NAME="Omarchy"` and Omarchy's nsswitch: the hook is load-bearing, not
+   cosmetic.
+5. **Closed 2026-09-11.** The interactive run happened (see §Where validation
+   stands), the empty-category bug it exposed is fixed (plan 038), and the two
+   paths still listed as unexercised are now covered by tests (commit
+   `ea936fc`): every category submitted empty (the "nothing selected" exit) and
+   the removal-loop ownership guard refusing an executable Omarchy did not
+   write. Both cases are mutation-checked — removing the early exit or the
+   re-check in a copy of the script fails exactly those assertions, so they are
+   load-bearing rather than decorative.
 6. **Jenkins agent secret** (above) — then confirm a green build on push.
 7. Backlog: opt-in debloat prompt inside the wrapper;
    `--restore-host-specific`; lab hardening (fixed 90 s wait, typed launch
