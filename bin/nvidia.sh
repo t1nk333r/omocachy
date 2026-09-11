@@ -103,7 +103,7 @@ if grep -rqs 'nvidia[-_]drm.*modeset' /etc/modprobe.d/ 2>/dev/null; then
     info "nvidia_drm modeset is already configured in /etc/modprobe.d; leaving it alone."
 else
     write_root_file /etc/modprobe.d/nvidia-modeset.conf <<'EOF'
-# Written by omocachy bin/nvidia.sh: DRM kernel mode setting for Wayland.
+# Written by omacachy bin/nvidia.sh: DRM kernel mode setting for Wayland.
 options nvidia_drm modeset=1 fbdev=1
 EOF
     info "Wrote /etc/modprobe.d/nvidia-modeset.conf (rebuild the initramfs to apply)."
@@ -113,17 +113,17 @@ fi
 # own file (often dotfile-managed), so it is never appended to. uwsm also
 # sources ~/.config/uwsm/env.d/* (uwsm(1) CONFIGURATION: "uwsm/env,
 # uwsm/env.d/*"), which gives this script a file it owns outright and can
-# rewrite on re-runs. OMOCACHY_SKIP_USER_CONFIGS=1 (install-omarchy-quattro.sh
+# rewrite on re-runs. OMACACHY_SKIP_USER_CONFIGS=1 (install-omarchy-quattro.sh
 # --skip-user-configs) means $HOME is off limits: print the lines instead.
-GPU_ENV_FILE="$HOME/.config/uwsm/env.d/50-omocachy-gpu"
-GPU_ENV_CONTENT='# Written by omocachy bin/nvidia.sh (NVIDIA)
+GPU_ENV_FILE="$HOME/.config/uwsm/env.d/50-omacachy-gpu"
+GPU_ENV_CONTENT='# Written by omacachy bin/nvidia.sh (NVIDIA)
 export LIBVA_DRIVER_NAME=nvidia
 export GBM_BACKEND=nvidia-drm
 export __GLX_VENDOR_LIBRARY_NAME=nvidia
 export NVD_BACKEND=direct
 export MOZ_DISABLE_RDD_SANDBOX=1
 export CUDA_DISABLE_PERF_BOOST=1'
-if [[ ${OMOCACHY_SKIP_USER_CONFIGS:-0} == 1 ]]; then
+if [[ ${OMACACHY_SKIP_USER_CONFIGS:-0} == 1 ]]; then
     info "--skip-user-configs: not writing $GPU_ENV_FILE. Recommended session environment (add to your own uwsm env or env.d file):"
     printf '%s\n' "$GPU_ENV_CONTENT"
 else

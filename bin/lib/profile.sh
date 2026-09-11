@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034  # this is a library: its arrays are used by callers
-# profile.sh — the profile-bundle format shared by omocachy-profile-export.sh,
-# omocachy-profile-import.sh and omocachy-doctor.sh. Sourced, never executed.
+# profile.sh — the profile-bundle format shared by omacachy-profile-export.sh,
+# omacachy-profile-import.sh and omacachy-doctor.sh. Sourced, never executed.
 #
 # Bundle layout (schema 1):
 #
@@ -19,8 +19,8 @@
 # Quickshell layer, shell/tooling config, the package and mise tool lists),
 # not $HOME.
 
-[[ -n ${OMOCACHY_PROFILE_SH:-} ]] && return 0
-OMOCACHY_PROFILE_SH=1
+[[ -n ${OMACACHY_PROFILE_SH:-} ]] && return 0
+OMACACHY_PROFILE_SH=1
 
 PROFILE_SCHEMA=1
 
@@ -164,7 +164,7 @@ profile_read_paths() {
 PROFILE_HOST_SPECIFIC=(
     .config/hypr/monitors.lua
     .config/hypr/monitors.conf
-    .config/uwsm/env.d/50-omocachy-gpu
+    .config/uwsm/env.d/50-omacachy-gpu
 )
 
 # --- plugins --------------------------------------------------------------

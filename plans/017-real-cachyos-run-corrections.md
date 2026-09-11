@@ -14,7 +14,7 @@
   mid-install; another left the wrapper unable to finish unattended)
 - **Depends on**: plan 016
 - **Category**: correctness
-- **Planned at**: omocachy `2b5fa74`, 2026-09-07
+- **Planned at**: omacachy `2b5fa74`, 2026-09-07
 - **Status**: DONE. Fixes are dry-run and fixture verified; **the fixes
   themselves have not been re-run on the guest yet**, and the non-Limine
   `HookDir` mechanism from plan 016 remains unproven in a real transaction
@@ -179,8 +179,8 @@ against `c00d638`.
 
 ```
 debug: config: HookDir: /etc/pacman.d/hooks/
-debug: config: HookDir: /etc/pacman.d/hooks-omocachy/
-debug: parsing hook file /etc/pacman.d/hooks-omocachy/90-mkinitcpio-install.hook
+debug: config: HookDir: /etc/pacman.d/hooks-omacachy/
+debug: parsing hook file /etc/pacman.d/hooks-omacachy/90-mkinitcpio-install.hook
 debug: skipping overridden hook /etc/pacman.d/hooks/90-mkinitcpio-install.hook
 debug: skipping overridden hook /usr/share/libalpm/hooks/90-mkinitcpio-install.hook
 ```
@@ -286,7 +286,7 @@ and into the Omarchy greeter, `--verify-only` 19/19 after it.
 
 - 2.1 holds, and this is the decisive evidence. The override's Exec on the
   guest is the PATH-pinned form; `pacman -S --debug linux-cachyos` shows the
-  hooks-omocachy hook parsed and all five others "skipping overridden", the
+  hooks-omacachy hook parsed and all five others "skipping overridden", the
   initramfs rebuilding (mtime 01:59:40 → 02:01:28), and **no** "does not
   update Limine boot entries", no "Building UKI", no `limine.conf`, no
   `EFI/Linux`. `find /boot -iname 'limine*' -o -path '*EFI/Linux*'` is empty

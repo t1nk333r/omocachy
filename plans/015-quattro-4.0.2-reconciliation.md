@@ -19,7 +19,7 @@
   Omarchy's array as the base, and the assertion suite
 - **Depends on**: plan 012 (the wrapper this reconciles)
 - **Category**: correctness
-- **Planned at**: omocachy `e5b5a1c` (Rename project branding to omocachy),
+- **Planned at**: omacachy `e5b5a1c` (Rename project branding to omacachy),
   2026-09-06; upstream stamp: omarchy **4.0.2-1**
 - **Status**: DONE (this session; dry-run verified on the dev machine —
   Omarchy 4.0.2 ISO install, Limine, LUKS, AMD; **never run for real on a
@@ -191,7 +191,7 @@ remembered user cannot log in.
 
 **Fix**: `--skip-user-configs` skips the skel backup, `omarchy-reinstall-configs`,
 `omarchy-provision-user`, the fish conf.d file, and (via
-`OMOCACHY_SKIP_USER_CONFIGS=1`) any GPU-script write into `$HOME`. Without
+`OMACACHY_SKIP_USER_CONFIGS=1`) any GPU-script write into `$HOME`. Without
 the flag, `omarchy-provision-user --first-install` runs with
 `OMARCHY_SETUP_CONTEXT=provision-owner` (the first-boot path: same
 first-install marking, headless theme set, Node from the network with a
@@ -211,8 +211,8 @@ Session=omarchy.desktop`, shape from the dev host).
 hierarchy as sourced for the session, and upstream's own
 `default/uwsm/env.d/10-omarchy:6-7` says user overrides belong "preferably,
 [in] ~/.config/uwsm/env.d/*". **Fix**: `amd-rocm.sh`/`nvidia.sh` write
-`~/.config/uwsm/env.d/50-omocachy-gpu` (a file they own and rewrite), or with
-`OMOCACHY_SKIP_USER_CONFIGS=1` print the lines and write nothing.
+`~/.config/uwsm/env.d/50-omacachy-gpu` (a file they own and rewrite), or with
+`OMACACHY_SKIP_USER_CONFIGS=1` print the lines and write nothing.
 
 ### F9. The update guard blocks direct `pacman -Syu` afterwards — including re-runs
 

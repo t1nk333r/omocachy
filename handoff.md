@@ -1,4 +1,4 @@
-# Handoff — omocachy
+# Handoff — omacachy
 
 Orientation for whoever (human or agent) picks this project up next.
 Updated 2026-09-11. User-facing docs live in
@@ -17,9 +17,9 @@ new machine:
 |---|---|---|
 | Omarchy 4 "Quattro" package wrapper | `bin/install-omarchy-quattro.sh` | Reconciled against installed 4.0.2 (plan 015), backed by a fixture matrix (`tests/run.sh`, plan 016) and **run end to end on real CachyOS guests: Limine, Limine+LUKS2 (root converted in place) and GRUB** (plans 016/017); systemd-boot is fixture-only |
 | v4 per-item debloat picker | `bin/debloat-quattro.sh` | Built, mock-verified, needs real-v4 TUI run |
-| Profile migration (export → import → doctor) | `bin/omocachy-profile-export.sh`, `bin/omocachy-profile-import.sh`, `bin/omocachy-doctor.sh` | Plan 018. Exercised end to end for real in the Omarchy lab VM (export, import onto a pristine guest, screenshot of the migrated desktop, `./lab test` green, rollback, re-import); the `packages` and `mise` stages ran online against a real CachyOS guest |
+| Profile migration (export → import → doctor) | `bin/omacachy-profile-export.sh`, `bin/omacachy-profile-import.sh`, `bin/omacachy-doctor.sh` | Plan 018. Exercised end to end for real in the Omarchy lab VM (export, import onto a pristine guest, screenshot of the migrated desktop, `./lab test` green, rollback, re-import); the `packages` and `mise` stages ran online against a real CachyOS guest |
 | Shared helpers | `bin/lib/common.sh`, `bin/lib/profile.sh`, `share/profile-paths.conf` | `common.sh` is the dry-run contract shared by the profile scripts; `profile.sh` owns bundle schema 1 and the exclude/secret/package policies |
-| GPU dispatch | `bin/gpu-detect.sh` → `gpu-setup.sh` → `nvidia.sh`/`amd-rocm.sh` | Working; NVIDIA probes the PCI id for the generation and warns on the one broken combination (open module, pre-Turing), installs `nvidia-vaapi-driver`, and writes a `modeset=1` drop-in only when nothing else sets one; AMD is VA-API-only; session env goes to `~/.config/uwsm/env.d/50-omocachy-gpu`, never `~/.config/uwsm/env`; all honour `--dry-run` |
+| GPU dispatch | `bin/gpu-detect.sh` → `gpu-setup.sh` → `nvidia.sh`/`amd-rocm.sh` | Working; NVIDIA probes the PCI id for the generation and warns on the one broken combination (open module, pre-Turing), installs `nvidia-vaapi-driver`, and writes a `modeset=1` drop-in only when nothing else sets one; AMD is VA-API-only; session env goes to `~/.config/uwsm/env.d/50-omacachy-gpu`, never `~/.config/uwsm/env`; all honour `--dry-run` |
 
 ## Version policy
 
@@ -62,7 +62,7 @@ maintenance isolated there and do not reintroduce those scripts to `main`.
    rescue`, `cryptsetup reencrypt`, `sd-encrypt` + `rd.luks.uuid=`) —
    produced the plan-017 corrections, the LUKS boot evidence and the profile
    migration (plan 018). 2026-09-11: the two parallel work lines
-   (wrapper/tests on `main`, profile/LUKS on `omocachy`) were consolidated
+   (wrapper/tests on `main`, profile/LUKS on `omacachy`) were consolidated
    into one branch.
 
 ## Working conventions (keep these)
@@ -203,7 +203,7 @@ systemd initramfs).
   baseline's reach.
 - **Profile migration hardened** (2026-09-11, plan 044). The import was validated
   against the real luna bundle in a lab guest and the run exposed a blocking
-  bug: `omocachy-profile-import.sh` aborted under `set -e`/`pipefail` when
+  bug: `omacachy-profile-import.sh` aborted under `set -e`/`pipefail` when
   `/run/user/$UID/hypr` did not exist — exactly the station case of importing
   over ssh before logging in — so `packages`/`mise`/`services`/`verify` never
   ran. Fixed, together with the six package failures the run surfaced:
@@ -244,7 +244,7 @@ systemd initramfs).
    transaction. The two items that were still fixture-only were then cleared in
    labs the same day: an initramfs rebuild triggered by a **kernel package
    transaction** (libalpm `--debug` shows it parsing
-   `/etc/pacman.d/hooks-omocachy/90-mkinitcpio-install.hook` and *skipping* both
+   `/etc/pacman.d/hooks-omacachy/90-mkinitcpio-install.hook` and *skipping* both
    same-named hooks, the initramfs mtime moved, no Limine artefacts), and
    `--skip-user-configs` on a **fresh** GRUB guest (four named steps skipped,
    `$HOME` untouched, transcript in `/tmp`, still 19 PASS / 0 FAIL).
@@ -280,13 +280,13 @@ systemd initramfs).
    re-check in a copy of the script fails exactly those assertions, so they are
    load-bearing rather than decorative.
 6. **CI is GitHub Actions now** (2026-09-11): `.github/workflows/lint.yml`,
-   `name: omocachy`, runs the repo's own gate (`bash -n` over every entry point
+   `name: omacachy`, runs the repo's own gate (`bash -n` over every entry point
    and helper, `shellcheck --severity=warning -x`, then `tests/run.sh`) on
-   pushes to `main`/`omocachy` and on pull requests, on `ubuntu-latest`. The
+   pushes to `main`/`omacachy` and on pull requests, on `ubuntu-latest`. The
    `Jenkinsfile` is deleted and the Jenkins agent + its unrecoverable secret are
    retired with it — that item is closed by removal, not by repair. The runner
    stack's entry for this repository is still named `runner-omarchy`; rename it
-   to `omocachy` there if the self-hosted path is ever wanted back (the workflow
+   to `omacachy` there if the self-hosted path is ever wanted back (the workflow
    would need `runs-on: [self-hosted, linux, docker]`). First runs exposed that
    the suite was only *apparently* hermetic, and fixing that closed three real
    gaps: the fixture harness had no `pacman`, so a runner without it failed 140

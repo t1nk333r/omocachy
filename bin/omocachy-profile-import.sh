@@ -1,13 +1,13 @@
 #!/bin/bash
 set -euo pipefail
 
-# omocachy-profile-import.sh — restore an omocachy profile bundle (see
-# bin/omocachy-profile-export.sh) onto a CachyOS machine that already runs
+# omacachy-profile-import.sh — restore an omacachy profile bundle (see
+# bin/omacachy-profile-export.sh) onto a CachyOS machine that already runs
 # Omarchy 4, i.e. after bin/install-omarchy-quattro.sh.
 #
 # Safety model:
 #   - every path the restore would overwrite is copied to
-#     ~/.local/state/omocachy/backups/import-<ts>/ FIRST, and that directory
+#     ~/.local/state/omacachy/backups/import-<ts>/ FIRST, and that directory
 #     gets a generated rollback.sh which puts the machine back;
 #   - the payload is merged, never deleted over: files the bundle does not
 #     carry are left alone;
@@ -109,10 +109,10 @@ stage_enabled() {
 }
 
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
-STATE_DIR="$HOME/.local/state/omocachy"
+STATE_DIR="$HOME/.local/state/omacachy"
 BACKUP_DIR="$STATE_DIR/backups/import-$TIMESTAMP"
 REPORT_DIR="$STATE_DIR/reports/import-$TIMESTAMP"
-WORK="$(mktemp -d -t omocachy-import-XXXXXX)"
+WORK="$(mktemp -d -t omacachy-import-XXXXXX)"
 trap 'rm -rf "$WORK"' EXIT
 
 BUNDLE="$(profile_resolve_bundle "$BUNDLE_ARG" "$WORK/bundle")" || die "cannot read bundle."
@@ -132,7 +132,7 @@ TGT_OMARCHY="$(pacman -Q omarchy 2>/dev/null | awk '{print $2}' || true)"
 TGT_ID="$(. /etc/os-release 2>/dev/null && echo "${ID:-unknown}")"
 TGT_GPU="$(bash "$SCRIPT_DIR/gpu-detect.sh" 2>/dev/null || echo unknown)"
 
-echo "=== omocachy-profile-import.sh ==="
+echo "=== omacachy-profile-import.sh ==="
 $DRY_RUN && echo "(dry-run: nothing will be changed)"
 echo ""
 echo "Bundle:   $BUNDLE"
@@ -246,7 +246,7 @@ write_rollback() {
     {
         echo '#!/bin/bash'
         echo 'set -euo pipefail'
-        echo "# Undo of omocachy-profile-import.sh run $TIMESTAMP."
+        echo "# Undo of omacachy-profile-import.sh run $TIMESTAMP."
         echo '# Restores the paths that existed before the import and removes the'
         echo '# ones it introduced. Pass --dry-run to see the plan.'
         echo 'DRY=false'
@@ -258,7 +258,7 @@ write_rollback() {
         echo '    # Stage the copy beside the target and swap it in, so a live'
         echo '    # desktop watching e.g. ~/.config/hypr never observes the'
         echo '    # directory missing for the duration of a copy.'
-        echo '    local stage="$HOME_DIR/$1.omocachy-rollback.$$"'
+        echo '    local stage="$HOME_DIR/$1.omacachy-rollback.$$"'
         echo '    rm -rf "$stage"'
         echo '    mkdir -p "$(dirname "$HOME_DIR/$1")"'
         echo '    cp -a "$BACKUP/$1" "$stage"'
@@ -450,11 +450,11 @@ stage_services() {
 stage_verify() {
     echo "--- verify ---"
     if $DRY_RUN; then
-        echo "DRYRUN: bash $SCRIPT_DIR/omocachy-doctor.sh --bundle $BUNDLE"
+        echo "DRYRUN: bash $SCRIPT_DIR/omacachy-doctor.sh --bundle $BUNDLE"
         record_stage verify SKIPPED
         return 0
     fi
-    if bash "$SCRIPT_DIR/omocachy-doctor.sh" --bundle "$BUNDLE"; then
+    if bash "$SCRIPT_DIR/omacachy-doctor.sh" --bundle "$BUNDLE"; then
         record_stage verify OK
     else
         record_stage verify FAILED

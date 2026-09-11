@@ -1,5 +1,5 @@
 #!/bin/bash
-# omocachy test suite. Runs on any Arch-based host; changes nothing.
+# omacachy test suite. Runs on any Arch-based host; changes nothing.
 #
 #   tests/run.sh              everything
 #   tests/run.sh lint         bash -n + shellcheck
@@ -144,9 +144,9 @@ dry_run_fixture() { # FIXTURE OUT DEC [extra args...]
     local fixture="$1" out="$2" dec="$3"; shift 3
     : >"$dec"
     PATH="$(omarchy_stubs):$PATH" \
-    OMOCACHY_SYSROOT="$FIXTURES/$fixture" \
-    OMOCACHY_DECISIONS_FILE="$dec" \
-    OMOCACHY_LOG="$WORK/$fixture.log" \
+    OMACACHY_SYSROOT="$FIXTURES/$fixture" \
+    OMACACHY_DECISIONS_FILE="$dec" \
+    OMACACHY_LOG="$WORK/$fixture.log" \
         "$INSTALLER" --dry-run --yes "$@" >"$out" 2>&1
 }
 
@@ -223,9 +223,9 @@ run_purity() {
     local out="$WORK/purity.out" dec="$WORK/purity.dec"
     : >"$dec"
     PATH="$shim:$PATH" \
-    OMOCACHY_SYSROOT="$FIXTURES/cachyos-limine-luks" \
-    OMOCACHY_DECISIONS_FILE="$dec" \
-    OMOCACHY_LOG="$WORK/purity.log" \
+    OMACACHY_SYSROOT="$FIXTURES/cachyos-limine-luks" \
+    OMACACHY_DECISIONS_FILE="$dec" \
+    OMACACHY_LOG="$WORK/purity.log" \
         "$INSTALLER" --dry-run --yes >"$out" 2>&1
     local rc=$?
     expect_eq "dry run completes with the stubs first on PATH" "0" "$rc"
@@ -235,9 +235,9 @@ run_purity() {
     # Same for the non-Limine path, which has more moving parts.
     : >"$log"
     PATH="$shim:$PATH" \
-    OMOCACHY_SYSROOT="$FIXTURES/cachyos-grub-plain" \
-    OMOCACHY_DECISIONS_FILE="$WORK/purity2.dec" \
-    OMOCACHY_LOG="$WORK/purity2.log" \
+    OMACACHY_SYSROOT="$FIXTURES/cachyos-grub-plain" \
+    OMACACHY_DECISIONS_FILE="$WORK/purity2.dec" \
+    OMACACHY_LOG="$WORK/purity2.log" \
         "$INSTALLER" --dry-run --yes >"$WORK/purity2.out" 2>&1
     rc=$?
     expect_eq "grub dry run completes with the stubs first on PATH" "0" "$rc"

@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# common.sh — helpers shared by omocachy's scripts. Sourced, never executed.
+# common.sh — helpers shared by omacachy's scripts. Sourced, never executed.
 #
 # The dry-run contract: every state-changing command in this project flows
 # through one of the helpers below. In dry-run mode they print the command
@@ -7,8 +7,8 @@
 # can enforce "no sudo outside run_root/write_root_file/append_root_file"
 # with a single grep and "no state changes in --dry-run" by inspection.
 
-[[ -n ${OMOCACHY_COMMON_SH:-} ]] && return 0
-OMOCACHY_COMMON_SH=1
+[[ -n ${OMACACHY_COMMON_SH:-} ]] && return 0
+OMACACHY_COMMON_SH=1
 
 # Scripts set this from their own --dry-run flag before calling the helpers.
 DRY_RUN=${DRY_RUN:-false}
