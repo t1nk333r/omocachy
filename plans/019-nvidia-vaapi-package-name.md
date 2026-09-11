@@ -19,6 +19,7 @@
 - **Depends on**: none
 - **Category**: bug
 - **Planned at**: commit `e80b564`, 2026-09-11
+- **Executed**: 2026-09-11 (landed at `76c94a0`); the Done criterion's global grep and Step 2's match count were corrected in `e0d1c3f` — this plan file quotes the wrong package name by design.
 
 ## Why this matters
 

@@ -17,6 +17,7 @@
 - **Depends on**: none (same file as plans 021, 027, 028, 032 — execute serially with them)
 - **Category**: bug
 - **Planned at**: commit `e80b564`, 2026-09-11
+- **Executed**: 2026-09-11 (landed at `5464d18`); the insertion order is stock-before-ours even when the ours-line already exists (later HookDirs win), and Step 2 was implemented after review as a check that runs before the Limine early-return when pacman.conf declares any HookDir.
 
 ## Why this matters
 

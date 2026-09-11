@@ -17,6 +17,7 @@
 - **Depends on**: none
 - **Category**: security
 - **Planned at**: commit `e80b564`, 2026-09-11
+- **Executed**: 2026-09-11 (landed at `f4a3836`); Step 1's literal alternation could not match `GITHUB_TOKEN`/`AWS_SECRET_ACCESS_KEY`, so `secret[_-]?access[_-]?key` and `token` were added; the STOP-1 false-positive probe (19→31→54 files on the real capture list, all non-config) is recorded in the batch report.
 
 ## Why this matters
 

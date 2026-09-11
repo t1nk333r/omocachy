@@ -9,18 +9,29 @@ version-selection `fetch-omarchy.sh`, and the network/walker patches). Plans
 checks before executing; their content remains directionally valid but line
 numbers and some README references have moved.
 
-Repo context for executors: ~300 lines of Bash (no tests, no package
-manager). Verification baseline: `bash -n bin/*.sh` locally plus the
-shellcheck CI workflow plan 001 introduces. All `basecamp/omarchy` facts were
-verified against master on 2026-08-17 — plans include their own upstream
-re-verification steps; run them.
+**Branch note for executors**: plans 001–014 describe the v3 line, now
+isolated on branch `v3`; their `fetch-omarchy.sh` / `patch_or_die` /
+`TESTED_OMARCHY_REF` dependency notes are historical — none of those files
+exist on `main`.
+
+Repo context for executors (2026-09-11): nine shell entry points plus
+`bin/lib/{common,profile,hooks-merge}.sh`, ~5.4K lines under `bin/`, and
+`tests/run.sh` — a hermetic fixture matrix (six sysroots) with `lint`,
+`hooks`, `units`, `picker`, `gpu`, `guard`, `rollback`, `matrix` and
+`purity` sections. Verification baseline: the lint gate in `handoff.md`
+(`bash -n` + `shellcheck --severity=warning -x` over `bin/*.sh`,
+`bin/lib/*.sh`, `tests/run.sh`) plus `tests/run.sh`. All `basecamp/omarchy`
+facts were verified against master on 2026-08-17 — plans include their own
+upstream re-verification steps; run them, and trust an *installed* Omarchy
+over memory (the reconciliation baseline is 4.0.2 while the dev host runs
+4.0.3 — plan 030's drift warning is the live reminder).
 
 **2026-09-11 audit batch (plans 019–034).** A read-only audit of `e80b564`
 (the merge of the two parallel work lines) found and vetted sixteen items;
 each plan stamps that commit, so run its drift check before executing. Batch
-dependencies and rejected findings are at the end of this file. The v3-era
-context lines in this header describe branch `v3`, not `main` — plan 030
-reconciles them.
+dependencies and rejected findings are at the end of this file. All sixteen
+were executed and landed on 2026-09-11 against `e80b564`; the v3-era context
+lines in this header were corrected at the same time (see the branch note).
 
 ## Execution order & status
 
@@ -52,22 +63,22 @@ reconciles them.
 
 | 018 | Profile migration: carry an existing Omarchy desktop (Quickshell layer, plugins, tooling, packages, user units) onto CachyOS — `bin/omocachy-profile-export.sh`, `bin/omocachy-profile-import.sh` with backups + generated rollback, `bin/omocachy-doctor.sh`, shared `bin/lib/{common,profile}.sh`, plus the NVIDIA generation/VA-API/modeset bits adopted from jeanmartins7's fork | P1 | L | 015 | DONE (this session, branch `omocachy`; export/import/rollback/re-import exercised for real in the Omarchy lab VM with a screenshot of the migrated desktop and a green `./lab test`; package + mise transactions verified online on a real CachyOS guest the same day, together with the Quattro wrapper itself; the LUKS re-apply evidence from 2026-09-08 and the keyserver fix are in the plan file) |
 
-| 019 | `nvidia.sh`: install `libva-nvidia-driver` (the package that exists), probe `linux-cachyos-nvidia-open`, name a chwd profile that exists | P1 | S | — | TODO |
-| 020 | Bundle trust boundary: validate `payload.captured[]` paths, verify the shipped `.sha256`, safe archive extraction, strip remote userinfo | P1 | M | — | TODO |
-| 021 | Scope LUKS detection to the root device (no false refusal on an unencrypted-root host with a data LUKS volume) | P1 | S | — | TODO |
-| 022 | Write the rollback before merging, keep `restored.tsv` next to it, back up dangling symlinks | P1 | S | — | TODO |
-| 023 | Mirror upstream's ownership guards for cursor-agent / muse / hermes in the debloat picker | P2 | S | — | TODO |
-| 024 | Close the package deny-policy holes (current bootloader names; Mesa/AMD/Intel/lib32) | P2 | S | — | TODO |
-| 025 | `doctor --bundle`: fail on an unreadable manifest instead of passing vacuously | P2 | S | — | TODO |
-| 026 | Case-insensitive, broader inline-credential sweep; add the missing credential-store names | P2 | S | — | TODO |
-| 027 | Snapper assertion compares against a real backup, or says it cannot | P2 | S | serial with 021/028/031/032 | TODO |
-| 028 | Install log outside `$HOME` for `--dry-run`, `--verify-only` and `--skip-user-configs` | P2 | S | serial with 021/027/031/032 | TODO |
-| 029 | Regression baseline: `units`/`picker`/`gpu` sections in `tests/run.sh`; route the GPU probe through the sysroot seam | P2 | M | best after 020/022–026 | TODO |
-| 030 | Docs and version truth: 4.0.2 baseline warning, validation-status contradictions, v3-era index context | P2 | S–M | — | TODO |
-| 031 | `ensure_hookdir_lines`: keep `/etc/pacman.d/hooks/` listed in every branch (+ fixture) | P3 | S | serial with 021/027/028/032 | TODO |
-| 032 | Wrapper sources `bin/lib/common.sh`; `confirm` for both prompts (fixes the `--dry-run` prompt block) | P3 | M | after 029 | TODO |
-| 033 | GPU scripts: strict flag parsing, `default:` dispatch branch, reachable no-AMD guard | P3 | S | after 019 | TODO |
-| 034 | `tests/run.sh` lint: fail when shellcheck is missing; align with the documented `-x`/warning gate | P3 | S | — | TODO |
+| 019 | `nvidia.sh`: install `libva-nvidia-driver` (the package that exists), probe `linux-cachyos-nvidia-open`, name a chwd profile that exists | P1 | S | — | DONE (76c94a0; `libva-nvidia-driver` installed, both open-module package forms probed, no nonexistent chwd profile; criteria amended in e0d1c3f) |
+| 020 | Bundle trust boundary: validate `payload.captured[]` paths, verify the shipped `.sha256`, safe archive extraction, strip remote userinfo | P1 | M | — | DONE (c63317f; manifest paths validated, digest verified when present, members checked, remotes scrubbed; 19 new `guard` assertions fail pre-fix) |
+| 021 | Scope LUKS detection to the root device (no false refusal on an unencrypted-root host with a data LUKS volume) | P1 | S | — | DONE (1e7a8bd; root-chain LUKS detection incl. btrfs subvols, crypttab warns instead of refusing; fixtures unchanged, dev host takes the root-chain path) |
+| 022 | Write the rollback before merging, keep `restored.tsv` next to it, back up dangling symlinks | P1 | S | — | DONE (b6ffd8a; undo written before the merge, list read at runtime, dangling symlinks backed up; new `rollback` section) |
+| 023 | Mirror upstream's ownership guards for cursor-agent / muse / hermes in the debloat picker | P2 | S | — | DONE (0a52f2e; upstream ownership guards mirrored, re-checked at removal; 4 of 5 new `picker` assertions fail pre-fix) |
+| 024 | Close the package deny-policy holes (current bootloader names; Mesa/AMD/Intel/lib32) | P2 | S | — | DONE (6745684; bootloader regex current, Mesa/AMD/Intel/lib32 denied; 12 of 15 denied names fail pre-fix) |
+| 025 | `doctor --bundle`: fail on an unreadable manifest instead of passing vacuously | P2 | S | — | DONE (4e94d26; manifest gate matches the real `packages` object layout; empty manifest FAILs instead of four vacuous PASSes) |
+| 026 | Case-insensitive, broader inline-credential sweep; add the missing credential-store names | P2 | S | — | DONE (f4a3836; case-insensitive sweep + token/secret_access_key; false-positive list (19→31→54 files, all non-config) recorded in the batch report) |
+| 027 | Snapper assertion compares against a real backup, or says it cannot | P2 | S | serial with 021/028/031/032 | DONE (51526b6; compares the newest on-disk backup or says it cannot verify) |
+| 028 | Install log outside `$HOME` for `--dry-run`, `--verify-only` and `--skip-user-configs` | P2 | S | serial with 021/027/031/032 | DONE (a3bfb3b; dry-run/verify-only/--skip-user-configs log to /tmp; $HOME file count unchanged 10→10) |
+| 029 | Regression baseline: `units`/`picker`/`gpu` sections in `tests/run.sh`; route the GPU probe through the sysroot seam | P2 | M | best after 020/022–026 | DONE (3c0a653; `units`/`picker`/`gpu` sections + GPU-probe seam guard; suite 124→137) |
+| 030 | Docs and version truth: 4.0.2 baseline warning, validation-status contradictions, v3-era index context | P2 | S–M | — | DONE (3d41803; 4.0.2 baseline warning, preview names the version; validation status reconciled against plan 017's evidence — the stale line was handoff's, not the README's) |
+| 031 | `ensure_hookdir_lines`: keep `/etc/pacman.d/hooks/` listed in every branch (+ fixture) | P3 | S | serial with 021/027/028/032 | DONE (5464d18; both HookDir lines ensured, stock-before-ours ordering, check extended to declared-HookDir Limine hosts; fixture fails pre-fix) |
+| 032 | Wrapper sources `bin/lib/common.sh`; `confirm` for both prompts (fixes the `--dry-run` prompt block) | P3 | M | after 029 | DONE (c33a764; wrapper sources `bin/lib/common.sh`, prompts via `confirm`; normalized dry-run diff empty, plain --dry-run no longer traps) |
+| 033 | GPU scripts: strict flag parsing, `default:` dispatch branch, reachable no-AMD guard | P3 | S | after 019 | DONE (a40a4bb; strict flags, dispatch default branch, reachable no-AMD guard, `OMOCACHY_GPU_TYPE` seam; pre-fix failures shown) |
+| 034 | `tests/run.sh` lint: fail when shellcheck is missing; align with the documented `-x`/warning gate | P3 | S | — | DONE (488835c; missing shellcheck FAILs, warning-severity `-x`, `SHELLCHECK_BIN`/`OMOCACHY_SKIP_SHELLCHECK`) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale)

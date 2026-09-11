@@ -17,6 +17,7 @@
 - **Depends on**: none (plan 019 fixes one doc mention; skip what it already fixed)
 - **Category**: docs
 - **Planned at**: commit `e80b564`, 2026-09-11
+- **Executed**: 2026-09-11 (landed at `3d41803`); the validation-status contradiction resolved toward the README — plan 017's §"Still unverified" shows both items RESOLVED and `git blame` puts the stale header line before them, so handoff's gate line (and plan 017's header) were corrected instead.
 
 ## Why this matters
 

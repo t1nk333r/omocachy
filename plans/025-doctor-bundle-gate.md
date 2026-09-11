@@ -17,6 +17,7 @@
 - **Depends on**: none
 - **Category**: bug
 - **Planned at**: commit `e80b564`, 2026-09-11
+- **Executed**: 2026-09-11 (landed at `4e94d26`); the Step 1 gate checks the real export layout — `packages` is an object of `explicit_native`/`explicit_foreign` arrays, plus `services.user_enabled`, not the flat array sketched here.
 
 ## Why this matters
 
