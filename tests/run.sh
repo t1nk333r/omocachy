@@ -14,8 +14,8 @@
 #
 # What the matrix proves and what it does not: it proves the wrapper's
 # DECISION LOGIC takes the intended branch on CachyOS-shaped input. It does
-# not prove the resulting system boots. Nothing in this repo has ever been
-# run on real CachyOS.
+# not prove the resulting system boots: real-CachyOS evidence lives in
+# plans/016, plans/017 and handoff.md; this matrix proves decision logic only.
 
 set -uo pipefail
 

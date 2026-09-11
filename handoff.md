@@ -15,7 +15,7 @@ new machine:
 
 | Component | Script | State |
 |---|---|---|
-| Omarchy 4 "Quattro" package wrapper | `bin/install-omarchy-quattro.sh` | Reconciled against installed 4.0.2 (plan 015), backed by a fixture matrix (`tests/run.sh`, plan 016) and **run end to end on real CachyOS guests: Limine, Limine+LUKS2 (root converted in place) and GRUB** (plans 016/017); systemd-boot is fixture-only |
+| Omarchy 4 "Quattro" package wrapper | `bin/install-omarchy-quattro.sh` | Reconciled against installed 4.0.2 (plan 015), backed by a fixture matrix (`tests/run.sh`, plan 016) and **run end to end on real CachyOS guests: Limine, Limine+LUKS2 (root converted in place) and GRUB** (plans 016/017); systemd-boot is fixture-only; the installed release has since moved to 4.0.3, which the wrapper now warns about (see below) |
 | v4 per-item debloat picker | `bin/debloat-quattro.sh` | Built, mock-verified, needs real-v4 TUI run |
 | Profile migration (export → import → doctor) | `bin/omocachy-profile-export.sh`, `bin/omocachy-profile-import.sh`, `bin/omocachy-doctor.sh` | Plan 018. Exercised end to end for real in the Omarchy lab VM (export, import onto a pristine guest, screenshot of the migrated desktop, `./lab test` green, rollback, re-import); the `packages` and `mise` stages ran online against a real CachyOS guest |
 | Shared helpers | `bin/lib/common.sh`, `bin/lib/profile.sh`, `share/profile-paths.conf` | `common.sh` is the dry-run contract shared by the profile scripts; `profile.sh` owns bundle schema 1 and the exclude/secret/package policies |
@@ -120,23 +120,39 @@ systemd initramfs).
   assertion and rebooted into the greeter. The conversion also exposed a
   keyserver abort, now fixed (idempotent key import + fallback keyservers).
 - **GRUB** (2026-09-07, non-Limine path): `--verify-only` after reboot
-  reported 18 PASS, 0 FAIL; bootloader detection was exercised with the ESP
-  unreadable and never mistook the `limine` package for the bootloader.
+  reported 19 PASS, 0 FAIL; bootloader detection was exercised with the ESP
+  unreadable and never mistook the `limine` package for the bootloader. This
+  is also the guest that re-ran every plan-017 fix: the PATH-pinned
+  `mkinitcpio` hook left no `limine.conf` and no UKI across a kernel
+  reinstall, and the artefact assertion was observed failing on a planted
+  `/boot/limine.conf` and passing again once it was removed.
 - **Fixture matrix** (`tests/run.sh`): the HOOKS merge for both initramfs
-  flavours and its refusal path, a dry run against four sysroot fixtures,
+  flavours and its refusal path, a dry run against six sysroot fixtures,
   and a dry-run purity check with failing command stubs.
 - **systemd-boot** and **real GPUs**: fixtures / dry-run only (the guest has
   no GPU). The dev machine (AMD) can exercise `amd-rocm.sh` for real.
+- **Omarchy 4.0.3** (dev host, 2026-09-11): the installed release has moved
+  off the 4.0.2 the reconciliation was verified against, and the wrapper now
+  warns on that drift (`OMARCHY_RECONCILED_VERSION`). Not a defect — the
+  HOOKS transform is deliberately version-tolerant — but the other reconciled
+  facts (drop-ins, scriptlets, ISO package closure) have not been re-audited
+  against 4.0.3. That audit is the next validation item, and the fixture
+  package stubs get refreshed when it lands.
 
 ## Release gates (the honest "not done" list)
 
-1. **The plan-017 fixes have not been re-run on a guest** — they landed after
-   the last real run (2026-09-07). The next real CachyOS run re-tests the ISO
-   package closure, the ufw ssh allowance and the `/etc/environment`
-   `OMARCHY_PATH` write together. Still fixture-only: a non-Limine `HookDir`
-   override inside a live pacman transaction, an initramfs rebuild on a
-   kernel upgrade, `limine-snapper-sync` accepting `TARGET_OS_NAME="CachyOS"`,
-   and a `--skip-user-configs` run on a fresh guest.
+1. **Every plan-017 fix has been re-run on a guest** — the round-two fixes on
+   the pristine GRUB guest on 2026-09-07 (`plans/017-*.md` §2.6: `ac62527`
+   for the PATH pin, the clean-ESP result and the initramfs rebuild on a
+   kernel reinstall; `e779c49` for the artefact assertion, observed both
+   passing and failing), and the non-Limine `HookDir` override is proven
+   inside a live pacman transaction by pacman's own `--debug` output. What no
+   guest has run is the *merged* tree (2026-09-11), so the next real CachyOS
+   run re-tests the ISO package closure, the ufw ssh allowance and the
+   `/etc/environment` `OMARCHY_PATH` write together. Still unproven on a
+   guest: `limine-snapper-sync` accepting `TARGET_OS_NAME="CachyOS"`, whether
+   `sudo omarchy update` picks up `/etc/environment`'s `OMARCHY_PATH` (run it
+   as your user), and a `--skip-user-configs` run on a fresh guest.
 2. **systemd-boot CachyOS install** — fixtures only; GRUB and Limine (with
    and without LUKS2) have run for real.
 3. **Real GPUs** — `nvidia.sh`/`amd-rocm.sh` are dry-run only; the dev
@@ -148,8 +164,10 @@ systemd initramfs).
    guest — enumeration/dry-run are mock-verified only.
 6. **Jenkins agent secret** (above) — then confirm a green build on push.
 7. Backlog: opt-in debloat prompt inside the wrapper;
-   `--restore-host-specific`; lab hardening (fixed 90 s wait, typed launch
-   line) and merging the lab's `cachyos-guest` branch.
+   `--restore-host-specific` (implemented and documented, but code-reviewed
+   rather than executed — no real migration has exercised it,
+   `plans/018-*.md`); lab hardening (fixed 90 s wait, typed launch line) and
+   merging the lab's `cachyos-guest` branch.
 
 ## Fast orientation for an agent
 

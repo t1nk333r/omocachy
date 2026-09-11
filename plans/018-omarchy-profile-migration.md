@@ -278,7 +278,9 @@ btrfs UUID survives, so `root=UUID=` and fstab needed no change.
   overrides are exercised only by the dry-run and the transform harness.
 - **Real GPUs** — the VM reports vendor `none`; `nvidia.sh`/`amd-rocm.sh`
   ran only as dry-run here.
-- **`--restore-host-specific`** is code-reviewed but not executed.
+- **`--restore-host-specific`** is code-reviewed but not executed:
+  implemented and documented (`README.md` §6,
+  `bin/omocachy-profile-import.sh`), but no real migration has exercised it.
 - The CachyOS lab guest itself (`LAB_DISTRO=cachyos`) lives on the
   `cachyos-guest` branch of a second lab checkout; the driver's 90 s
   live-desktop wait and the launch keystrokes are measured on this host

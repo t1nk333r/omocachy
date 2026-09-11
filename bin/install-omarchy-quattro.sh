@@ -32,6 +32,12 @@ OMARCHY_REPO_SERVER='https://pkgs.omarchy.org/stable/$arch'
 TIMESTAMP="$(date +%Y%m%d%H%M%S)"
 BACKUP_SUFFIX="omarchy-quattro-backup-$TIMESTAMP"
 
+# The Omarchy release this reconciliation was last verified against
+# (plans/015/016). A newer installed version is not an error — the HOOKS
+# transform is deliberately version-tolerant — but the other facts
+# (drop-ins, scriptlets, ISO closure) may have moved with it.
+OMARCHY_RECONCILED_VERSION="4.0.2"
+
 # The HOOKS array omarchy-settings 4.0.2 ships in
 # /etc/mkinitcpio.conf.d/omarchy_hooks.conf. Used only to PREVIEW the merge
 # before the packages are installed; the drop-in itself transforms whatever
@@ -316,6 +322,18 @@ REAPPLY=false
 if pkg_installed omarchy; then
     REAPPLY=true
     echo "omarchy $(pkg_version omarchy) is already installed: this run is a re-apply (packages upgraded, reconciliation re-asserted)."
+fi
+
+# Version drift is a warning, not an error: the HOOKS transform works on
+# whatever array is present, but the other reconciled facts (drop-ins,
+# scriptlets, ISO package closure) were only ever verified against
+# OMARCHY_RECONCILED_VERSION. Compare the release (`pacman -Q` prints
+# 4.0.3-1; the baseline names the release 4.0.2, and the fixture sysroots
+# carry 4.0.2-1), and say so rather than letting a clean run imply the newer
+# release was audited too.
+if installed_omarchy_version="$(pkg_version omarchy-settings)" \
+    && [[ -n $installed_omarchy_version && ${installed_omarchy_version%%-*} != "$OMARCHY_RECONCILED_VERSION" ]]; then
+    echo "Warning: this wrapper was reconciled against Omarchy $OMARCHY_RECONCILED_VERSION; this machine has $installed_omarchy_version. Re-read plans/016-*.md's verification steps before trusting the reconciliation." >&2
 fi
 
 # ---------------------------------------------------------------------------
@@ -1244,7 +1262,7 @@ fi
 if [[ -n $CURRENT_HOOKS ]]; then
     run_root mkdir -p /etc/mkinitcpio.conf.d
     render_keep_hooks_conf "$CURRENT_HOOKS" | write_root_file "$ZZ_HOOKS_CONF"
-    echo "Predicted merged HOOKS against omarchy-settings 4.0.2's array: ($MERGED_HOOKS)"
+    echo "Predicted merged HOOKS against omarchy-settings $OMARCHY_RECONCILED_VERSION's array: ($MERGED_HOOKS)"
 else
     echo "Warning: could not determine current mkinitcpio HOOKS; skipping $ZZ_HOOKS_CONF." >&2
 fi

@@ -15,10 +15,11 @@
 - **Depends on**: plan 016
 - **Category**: correctness
 - **Planned at**: omocachy `2b5fa74`, 2026-09-07
-- **Status**: DONE. Fixes are dry-run and fixture verified; **the fixes
-  themselves have not been re-run on the guest yet**, and the non-Limine
-  `HookDir` mechanism from plan 016 remains unproven in a real transaction
-  (see "Still unverified").
+- **Status**: DONE. Every fix is dry-run and fixture verified **and re-run on
+  the guest** — the round-two fixes on the pristine GRUB guest (`ac62527`
+  then `e779c49`), with the non-Limine `HookDir` mechanism proven inside a
+  live pacman transaction; what is still unverified is listed under
+  "Still unverified".
 
 ## What the real run proved (plan 016 holding up)
 

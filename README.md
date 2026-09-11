@@ -141,8 +141,10 @@ the confirmation prompt (safe to combine with `--dry-run`).
 
 **Reconciliation guarantees.** Omarchy's install stages are safe on a stock
 Omarchy machine but destructive on CachyOS if left alone. Each of these was
-verified against an installed Omarchy 4.0.2 (evidence in
-`plans/015-quattro-4.0.2-reconciliation.md`):
+verified against an installed Omarchy 4.0.2 — the release this reconciliation
+is still baselined on (`OMARCHY_RECONCILED_VERSION` in the wrapper, which
+warns when the installed release moves off it). Evidence in
+`plans/015-quattro-4.0.2-reconciliation.md`:
 
 - **CachyOS pacman repos are preserved.** `omarchy-apply-system` overwrites
   `/etc/pacman.conf` *and* `/etc/pacman.d/mirrorlist` with Omarchy's own
@@ -370,10 +372,11 @@ step and scans that log for the failure patterns worth reading.
 Arch-based host and changes nothing: `bash -n` + `shellcheck`, the HOOKS
 merge against both initramfs flavours and its refusal paths, a dry run
 against each fixture sysroot in `tests/fixtures/` (CachyOS+Limine+LUKS,
-CachyOS+GRUB, CachyOS+systemd-boot-with-the-limine-package-installed, and
-this project's own Omarchy host as a control), and a dry-run purity check
-that puts failing stubs for `sudo`/`pacman`/`cp`/`mv`/`systemctl` first on
-`PATH` and proves none of them is executed. Fixtures work through
+CachyOS+GRUB, CachyOS+systemd-boot-with-the-limine-package-installed, a
+`/etc/pacman.d/hooks/` `HookDir` preset, the irreconcilable-HOOKS refusal
+case, and this project's own Omarchy host as a control), and a dry-run purity
+check that puts failing stubs for `sudo`/`pacman`/`cp`/`mv`/`systemctl` first
+on `PATH` and proves none of them is executed. Fixtures work through
 `OMOCACHY_SYSROOT=<dir>`, which redirects every *read* of host state and
 requires `--dry-run`.
 
@@ -388,25 +391,34 @@ cascade, and a false-failing ufw assertion).
 
 Both guests were carried through a reboot. On the GRUB one, ufw came up
 **active** with `22/tcp ALLOW IN` and ssh reconnected on the first attempt —
-`--verify-only` after that reboot: 18 PASS, 0 FAIL. Bootloader detection was
+`--verify-only` after that reboot: 19 PASS, 0 FAIL. Bootloader detection was
 also exercised with the ESP mounted `drwx------`, with and without `bootctl`
 available: it answered `grub` in all four combinations, degrading to the
 warned package probe only in the worst case, and never mistaking a GRUB
 machine for a Limine one.
 
-Every fix those runs produced was re-run on a guest afterwards, including the
-one that matters most: on a pristine GRUB install the PATH-pinned hook
-produced no `limine.conf` and no UKI across a kernel reinstall (both appeared
-every time before the pin), and the assertion that checks for them was
-observed both passing on a clean ESP and failing on a planted
-`/boot/limine.conf`.
+Every fix those runs produced was re-run on a guest afterwards — the
+round-two fixes on the same day (`plans/017-*.md` §2.6, `ac62527` then
+`e779c49`) — including the one that matters most: on a pristine GRUB install
+the PATH-pinned hook produced no `limine.conf` and no UKI across a kernel
+reinstall (both appeared every time before the pin), and the assertion that
+checks for them was observed both passing on a clean ESP and failing on a
+planted `/boot/limine.conf`. The last real guest run was 2026-09-08 and the
+merge that joined the two work lines came after it, so no guest has yet run
+the combined tree: the next real CachyOS run re-tests the ISO package
+closure, the ufw ssh allowance and the `/etc/environment` `OMARCHY_PATH`
+write together.
 
 What that does *not* mean: systemd-boot has only ever been exercised as a
-fixture, and no run has covered a non-btrfs or non-LUKS layout. The fixture
-matrix proves the decision logic takes the intended branch on CachyOS-shaped
-input; it does not prove the resulting system boots. Treat your first CachyOS
-run as a test: take a snapshot, read the dry-run, keep a live USB handy — and
-if you administer the box over ssh, read the ufw section above first.
+fixture; no run has covered a non-btrfs or non-LUKS layout; whether `sudo
+omarchy update` picks up `/etc/environment`'s `OMARCHY_PATH` is untested (run
+the update as your user); and `limine-snapper-sync` accepting
+`TARGET_OS_NAME="CachyOS"` plus a `--skip-user-configs` run are still
+unproven on a guest. The fixture matrix proves the decision logic takes the
+intended branch on CachyOS-shaped input; it does not prove the resulting
+system boots. Treat your first CachyOS run as a test: take a snapshot, read
+the dry-run, keep a live USB handy — and if you administer the box over ssh,
+read the ufw section above first.
 
 ## 4. How CachyOS/Omarchy Conflicts Are Resolved
 
@@ -562,7 +574,9 @@ Stages, selectable with `--only`/`--skip`: `configs`, `packages`, `mise`,
   `~/.config/hypr/monitors.lua` and `~/.config/uwsm/env.d/50-omocachy-gpu`
   describe the *old* machine — a foreign monitor layout can leave you without
   a usable display. They are parked as `<name>.from-<source-host>` for you to
-  merge by hand; `--restore-host-specific` overrides that.
+  merge by hand; `--restore-host-specific` overrides that. That flag is
+  implemented and documented, but it is code-reviewed rather than executed:
+  no real migration has exercised it yet (`plans/018-*.md`).
 - **Packages are filtered by policy, out loud.** Kernels and headers,
   bootloaders, the NVIDIA/mesa driver stack, `omarchy*`/`quickshell*`,
   base-system packages, `cachyos-*` metapackages and `tldr` are never

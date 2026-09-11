@@ -1,4 +1,4 @@
-# Control: the owner's own Omarchy 4.0.2 host (real /etc/mkinitcpio.conf and
+# Control: the owner's own Omarchy 4.0.x host (real /etc/mkinitcpio.conf and
 # conf.d files, sanitised cmdline). A regression on this machine shows up as
 # a diff here. It is a re-apply, is not CachyOS, and boots Limine with the
 # udev/encrypt flavour.
