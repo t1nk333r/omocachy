@@ -119,30 +119,67 @@ systemd initramfs).
 - **GRUB** (2026-09-07, non-Limine path): `--verify-only` after reboot
   reported 18 PASS, 0 FAIL; bootloader detection was exercised with the ESP
   unreadable and never mistook the `limine` package for the bootloader.
+- **systemd-boot** (2026-09-11, `~/Work/t1nk33r-lab-cachyos-sdboot`): a copy
+  of the GRUB lab converted in place (`bootctl install`, a loader entry built
+  from `/proc/cmdline`, `efibootmgr -o`; it boots with `BootCurrent` = "Linux
+  Boot Manager"). Detection answers `Bootloader: systemd-boot (bootctl
+  LoaderInfo: systemd-boot 261.2-1-arch)` with `LUKS detected: true (cmdline
+  unlock style: systemd)` and `/usr/bin/mkinitcpio -P`. It is a *conversion*,
+  not an installer-chosen systemd-boot system: CachyOS's Limine packages were
+  already present, which is the `cachyos-sdboot-luks` fixture's shape. The
+  runs exposed four defects, all fixed and re-verified here on 2026-09-11:
+  the ISO closure was missing `xdg-user-dirs` and `mise` (plan 037) and
+  `chromium` (plan 039 — user seeding sets it as the default browser);
+  snapper's stage is not idempotent when `/.snapshots` exists without
+  `/etc/snapper/configs/root`, apply-system's own log was invisible to this
+  script's failure diagnosis, and `limine-snapper-sync` left Limine artefacts
+  on `/boot` that this script's own assertion then failed on (plan 040).
+  Final state: a full run exits 0 with **19 PASS / 0 FAIL**, and so does
+  `--verify-only` after a real reboot, with `rd.luks.uuid=` in the cmdline.
+- **`bin/debloat-quattro.sh`, driven interactively** (2026-09-11, the Omarchy 4
+  guest): the picker ran on the desktop — one package removed through
+  `omarchy-pkg-drop` (pacman transaction + snapper snapshots), one web app
+  through the webapp helper, one agent CLI stub through the stub binder.
+  Submitting a category empty exposed the bug plan 038 fixes: `gum choose
+  --no-limit` prints one empty line, the empty-string element reached the
+  removal phase, upstream refused it, and `set -e` skipped every later
+  removal. Re-run after the fix: the selected stub is removed, no refusal, and
+  the closing restore note prints.
 - **Fixture matrix** (`tests/run.sh`): the HOOKS merge for both initramfs
   flavours and its refusal path, a dry run against four sysroot fixtures,
   and a dry-run purity check with failing command stubs.
-- **systemd-boot** and **real GPUs**: fixtures / dry-run only (the guest has
-  no GPU). The dev machine (AMD) can exercise `amd-rocm.sh` for real.
+- **Real GPUs**: `nvidia.sh` is dry-run only (no NVIDIA hardware in the lab);
+  `amd-rocm.sh` ran for real on the dev machine (plan 036).
 
 ## Release gates (the honest "not done" list)
 
-1. **The plan-017 fixes have not been re-run on a guest** — they landed after
-   the last real run (2026-09-07). The next real CachyOS run re-tests the ISO
-   package closure, the ufw ssh allowance and the `/etc/environment`
-   `OMARCHY_PATH` write together. Still fixture-only: a non-Limine `HookDir`
-   override inside a live pacman transaction, an initramfs rebuild on a
-   kernel upgrade, `limine-snapper-sync` accepting `TARGET_OS_NAME="CachyOS"`,
-   and a `--skip-user-configs` run on a fresh guest.
-2. **systemd-boot CachyOS install** — fixtures only; GRUB and Limine (with
-   and without LUKS2) have run for real.
-3. **Real GPUs** — `nvidia.sh`/`amd-rocm.sh` are dry-run only; the dev
-   machine (AMD) can run `amd-rocm.sh` for real.
+1. **The plan-017 fixes were re-run on a guest** (2026-09-11, the systemd-boot
+   guest): the ISO package closure (now including `xdg-user-dirs`, `mise` and
+   `chromium`), the ufw ssh allowance and the `/etc/environment` `OMARCHY_PATH`
+   write all assert PASS in the same run, and the shadow `HookDir` override was
+   exercised inside a live pacman transaction (`pacman -Qkk
+   limine-mkinitcpio-hook` stays clean). Still fixture-only: an initramfs
+   rebuild triggered by a kernel upgrade, `limine-snapper-sync` accepting
+   `TARGET_OS_NAME="CachyOS"`, and a `--skip-user-configs` run on a fresh guest.
+2. **systemd-boot CachyOS machine** — run for real on 2026-09-11 on a guest
+   converted from GRUB: detection, the hook policy, the initramfs rebuild, the
+   post-install assertion suite (19 PASS / 0 FAIL) and `--verify-only` after a
+   reboot all pass. Not yet exercised: an *installer*-chosen systemd-boot (this
+   was a conversion), and a systemd-boot machine without CachyOS's Limine
+   packages installed.
+3. **Real GPUs** — `amd-rocm.sh` ran for real on the dev machine 2026-09-11
+   (plan 036: four packages plus the env file, `vainfo`/`rocm-smi`/`vulkaninfo`
+   on the card, graphics stack untouched); `nvidia.sh` stays dry-run only (no
+   NVIDIA hardware in the lab).
 4. **`omarchy-settings` upgrade through the preserve hook** — installed and
    the first-install restore verified; no upgrade transaction has fired the
    hook yet.
-5. **Real interactive run of `bin/debloat-quattro.sh`** on the CachyOS
-   guest — enumeration/dry-run are mock-verified only.
+5. **Real interactive run of `bin/debloat-quattro.sh`** — done 2026-09-11 on
+   the Omarchy 4 guest (one package, one web app, one agent CLI stub removed;
+   §Where validation stands). The empty-category bug the run exposed is fixed
+   (plan 038) with a stub-`gum` regression case. Not yet exercised: submitting
+   every category empty in one run (the "nothing selected" exit), and the
+   ownership guard refusing a file it does not own.
 6. **Jenkins agent secret** (above) — then confirm a green build on push.
 7. Backlog: opt-in debloat prompt inside the wrapper;
    `--restore-host-specific`; lab hardening (fixed 90 s wait, typed launch
