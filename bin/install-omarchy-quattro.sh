@@ -442,12 +442,17 @@ root_luks=false
 root_resolved=true
 if [[ -z $SYSROOT ]]; then
     root_src="$(findmnt -no SOURCE / 2>/dev/null || true)"
-    if [[ -n $root_src ]]; then
-        if lsblk -sno FSTYPE "$root_src" 2>/dev/null | grep -q crypto_LUKS; then
-            root_luks=true
-        fi
-    else
+    # btrfs subvolumes are printed as DEV[/subvol]; lsblk wants the device.
+    root_src="${root_src%%\[*}"
+    if [[ -z $root_src ]]; then
         root_resolved=false
+    elif ! root_fstypes="$(lsblk -sno FSTYPE "$root_src" 2>/dev/null)"; then
+        # A root source lsblk cannot walk is an unresolved root, not evidence
+        # that the root is unencrypted: say so instead of reading a silent
+        # false. The cmdline signal still applies.
+        root_resolved=false
+    elif grep -q crypto_LUKS <<<"$root_fstypes"; then
+        root_luks=true
     fi
 fi
 
