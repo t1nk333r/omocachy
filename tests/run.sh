@@ -292,7 +292,7 @@ picker_section() { # OUT HEADER
 
 run_picker() {
     head_ "debloat picker"
-    local d="$WORK/picker" out rc
+    local d="$WORK/picker" g="$WORK/picker-guards" out gout rc
     mkdir -p "$d/apps" "$d/bin"
     printf '[Desktop Entry]\nExec=omarchy-launch-webapp https://example.invalid\n' >"$d/apps/Example.desktop"
     printf '[Desktop Entry]\nExec=xdg-terminal-exec --app-id=TUI.devtools\n' >"$d/apps/Devtools.desktop"
@@ -312,6 +312,44 @@ run_picker() {
     expect_eq "picker: webapp enumerated" "  Example" "$(picker_section "$out" "Web apps")"
     expect_eq "picker: TUI enumerated" "  Devtools" "$(picker_section "$out" "TUIs")"
     expect_eq "picker: agent CLI stub enumerated" "  codex" "$(picker_section "$out" "Agent CLI stubs")"
+
+    # Ownership guards: upstream removes cursor-agent, muse and hermes only
+    # when the file at that path is the wrapper Omarchy's own installer wrote,
+    # because Cursor's installer, a personal Muse wrapper or Hermes Desktop's
+    # command can live there. A user's launcher must not be offered for rm -f.
+    mkdir -p "$g/bin"
+    printf '%s\n' 'rm -f ~/.local/bin/codex \' '  ~/.local/bin/cursor-agent' \
+        'rm -f ~/.local/bin/muse' 'rm -f ~/.local/bin/hermes' >"$g/upstream.sh"
+    printf '#!/bin/sh\n' >"$g/bin/codex"
+    ln -s /bin/true "$g/bin/cursor-agent"      # Cursor's own link, not the wrapper
+    printf 'a personal muse wrapper\n' >"$g/bin/muse"
+    printf 'hermes desktop command\n' >"$g/bin/hermes"
+
+    gout="$g/list.out"
+    DQ_APP_DIR="$d/apps" DQ_BIN_DIR="$g/bin" \
+    DQ_OMARCHY_SCRIPT="$g/upstream.sh" DQ_BINDINGS_FILE="$d/bindings.conf" \
+        bash "$REPO_DIR/bin/debloat-quattro.sh" --list >"$gout" 2>&1
+    expect_eq "picker guard: symlinked cursor-agent not offered" "" \
+        "$(picker_section "$gout" "Agent CLI stubs" | grep -x '  cursor-agent')"
+    expect_eq "picker guard: marker-less muse not offered" "" \
+        "$(picker_section "$gout" "Agent CLI stubs" | grep -x '  muse')"
+    # hermes is decided by omarchy-install-hermes-cli --owns, which answers
+    # about ~/.local/bin/hermes and nothing else: a file the picker found
+    # anywhere else is never authorized, so this holds on any host.
+    expect_eq "picker guard: hermes outside Omarchy's own path not offered" "" \
+        "$(picker_section "$gout" "Agent CLI stubs" | grep -x '  hermes')"
+    expect_eq "picker guard: unconditional stub still offered" "  codex" \
+        "$(picker_section "$gout" "Agent CLI stubs")"
+
+    # The same path holding the mise wrapper Omarchy wrote is still offered,
+    # and the removal loop re-checks it before rm -f.
+    rm "$g/bin/cursor-agent"
+    printf '#!/bin/bash\nmise use -g --quiet "cursor-agent" || exit 1\n' >"$g/bin/cursor-agent"
+    DQ_APP_DIR="$d/apps" DQ_BIN_DIR="$g/bin" \
+    DQ_OMARCHY_SCRIPT="$g/upstream.sh" DQ_BINDINGS_FILE="$d/bindings.conf" \
+        bash "$REPO_DIR/bin/debloat-quattro.sh" --list >"$gout" 2>&1
+    expect_eq "picker guard: the cursor-agent wrapper Omarchy wrote is offered" "  cursor-agent" \
+        "$(picker_section "$gout" "Agent CLI stubs" | grep -x '  cursor-agent')"
 }
 
 # ---------------------------------------------------------------------------

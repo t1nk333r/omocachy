@@ -141,6 +141,37 @@ parse_stub_list() {
     ' "$script" 2>/dev/null || true
 }
 
+# True when this name is one the picker may remove. Upstream removes most of
+# the parsed names unconditionally; cursor-agent, muse and hermes only when the
+# file is the wrapper Omarchy's own installer wrote, because a launcher the
+# user put at the same path must survive (Cursor's own installer links
+# cursor-agent, Muse may be a personal wrapper, Hermes Desktop ships its own
+# command). The mise wrappers carry the marker line upstream greps for; hermes
+# is answered by the installer itself via `--owns`, which takes no argument and
+# reports on its own path only.
+stub_owned_by_omarchy() { # NAME
+    local name="$1"
+    local file="$BIN_DIR/$name"
+    case "$name" in
+    cursor-agent)
+        [[ -f $file && ! -L $file ]] && grep -Eq '^mise use -g .*"cursor-agent"' "$file"
+        ;;
+    muse)
+        [[ -f $file && ! -L $file ]] && grep -Eq '^mise use -g .*"http:muse\[' "$file"
+        ;;
+    hermes)
+        # --owns speaks about ~/.local/bin/hermes and nothing else, so under the
+        # DQ_BIN_DIR test override it would be answering about a different file:
+        # fail closed rather than authorize a removal it never judged.
+        [[ "$file" == "$HOME/.local/bin/hermes" ]] || return 1
+        command -v omarchy-install-hermes-cli >/dev/null 2>&1 && omarchy-install-hermes-cli --owns
+        ;;
+    *)
+        return 0
+        ;;
+    esac
+}
+
 pkg_warning=""
 mapfile -t parsed_pkgs < <(parse_pkg_list "$OMARCHY_SCRIPT")
 if [[ "${#parsed_pkgs[@]}" -eq 0 ]]; then
@@ -183,10 +214,11 @@ if [[ -d "$APP_DIR" ]]; then
     done < <(find "$APP_DIR" -maxdepth 1 -name '*.desktop' -print0 2>/dev/null)
 fi
 
-# Agent CLI stubs: which of the parsed/fallback stub names exist in BIN_DIR.
+# Agent CLI stubs: which of the parsed/fallback stub names exist in BIN_DIR and
+# are Omarchy's own to remove.
 stub_present=()
 for stub in "${parsed_stubs[@]}"; do
-    if [[ -e "$BIN_DIR/$stub" ]]; then
+    if [[ -e "$BIN_DIR/$stub" ]] && stub_owned_by_omarchy "$stub"; then
         stub_present+=("$stub")
     fi
 done
@@ -436,6 +468,12 @@ done
 
 if [[ "${#selected_stubs[@]}" -gt 0 ]]; then
     for stub in "${selected_stubs[@]}"; do
+        # Re-checked here so a path that stopped being Omarchy's own between the
+        # picker and this point is never deleted.
+        if ! stub_owned_by_omarchy "$stub"; then
+            echo "Skipping $stub: not the wrapper Omarchy installed."
+            continue
+        fi
         if [[ "$DRY_RUN" -eq 1 ]]; then
             echo "DRYRUN: rm -f $BIN_DIR/$stub"
         else
