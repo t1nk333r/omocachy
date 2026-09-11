@@ -989,38 +989,73 @@ fi
 # ---------------------------------------------------------------------------
 
 ensure_hookdir_lines() {
-    local conf tmp
+    local conf tmp anchor where add line l
+    local -a missing=()
+    local have_stock=false have_ours=false
     conf="$(host_path /etc/pacman.conf)"
-    if grep -qxF "HookDir = $OMOCACHY_HOOK_DIR/" "$conf" 2>/dev/null; then
-        echo "HookDir override already registered in /etc/pacman.conf."
+    grep -qxF "HookDir = $PACMAN_HOOK_DIR/" "$conf" 2>/dev/null && have_stock=true
+    grep -qxF "HookDir = $OMOCACHY_HOOK_DIR/" "$conf" 2>/dev/null && have_ours=true
+    if $have_stock && $have_ours; then
+        echo "HookDir lines already registered in /etc/pacman.conf."
         return 0
     fi
-    if grep -qE '^\s*HookDir\s*=' "$conf" 2>/dev/null; then
-        # The file already sets HookDir, so pacman's /etc/pacman.d/hooks
-        # default is already replaced by whatever it lists. Insert ours
-        # directly after the LAST existing HookDir line: same section, and
-        # later directories win.
-        echo "Inserting \"HookDir = $OMOCACHY_HOOK_DIR/\" after the last existing HookDir line in /etc/pacman.conf."
-        if $DRY_RUN; then
-            echo "DRYRUN: rewrite /etc/pacman.conf with that one line added"
-        else
-            tmp="$(mktemp)"
-            awk -v ours="HookDir = $OMOCACHY_HOOK_DIR/" '
-                { line[NR] = $0; if ($0 ~ /^[[:space:]]*HookDir[[:space:]]*=/) last = NR }
-                END { for (i = 1; i <= NR; i++) { print line[i]; if (i == last) print ours } }
-            ' "$conf" >"$tmp"
-            run_root cp -f "$tmp" /etc/pacman.conf
-            rm -f "$tmp"
-        fi
-    else
+    # Every branch below ensures BOTH lines, not just ours. Naming any HookDir
+    # replaces pacman's /etc/pacman.d/hooks default, so the stock directory
+    # has to be named explicitly or /etc/os-release's preserve hook (it lives
+    # there) silently stops firing; and ours has to be named or the limine
+    # hooks are not shadowed.
+    $have_stock || missing+=("HookDir = $PACMAN_HOOK_DIR/")
+    $have_ours || missing+=("HookDir = $OMOCACHY_HOOK_DIR/")
+    printf 'Adding to /etc/pacman.conf: %s\n' "${missing[*]}"
+    if ! grep -qE '^[[:space:]]*HookDir[[:space:]]*=' "$conf" 2>/dev/null; then
         # No HookDir at all: pacman's default is the single directory
         # /etc/pacman.d/hooks, and naming any HookDir replaces that default,
-        # so both lines are written -- in this order.
-        run_root sed -i "/^\[options\]/a HookDir = $PACMAN_HOOK_DIR/\nHookDir = $OMOCACHY_HOOK_DIR/" /etc/pacman.conf
+        # so both lines are written -- in this order. Driven from `missing`
+        # so a third line needs no new branch here.
+        for line in "${missing[@]}"; do add+="${add:+\\n}$line"; done
+        run_root sed -i "/^\[options\]/a $add" /etc/pacman.conf
+    else
+        # The file already sets HookDir, so a directory it does not name is
+        # out of the search path entirely. Insert the missing lines with the
+        # stock directory BEFORE ours: pacman gives later directories
+        # precedence, and ours must win for the shadowing hooks to shadow
+        # anything. Normally that anchor is the last existing HookDir line;
+        # when ours is already present the only safe anchor is in front of it,
+        # because appending after it would move the stock directory later in
+        # the search path and re-arm the limine hooks this policy keeps inert.
+        if $have_ours; then
+            anchor="$(grep -nxF "HookDir = $OMOCACHY_HOOK_DIR/" "$conf" | head -1 | cut -d: -f1)"
+            where=before
+        else
+            anchor="$(grep -nE '^[[:space:]]*HookDir[[:space:]]*=' "$conf" | tail -1 | cut -d: -f1)"
+            where=after
+        fi
+        if $DRY_RUN; then
+            echo "DRYRUN: rewrite /etc/pacman.conf with the missing HookDir lines added"
+        else
+            # The missing lines go in as the first awk input; `where` picks the
+            # anchor line's side. Two files rather than a newline-joined -v
+            # assignment so the program stays portable across awks.
+            tmp="$(mktemp)"
+            printf '%s\n' "${missing[@]}" >"$tmp.lines"
+            awk -v anchor="$anchor" -v where="$where" '
+                NR == FNR { add[++n] = $0; next }
+                {
+                    if (FNR == anchor && where == "before") for (i = 1; i <= n; i++) print add[i]
+                    print
+                    if (FNR == anchor && where == "after") for (i = 1; i <= n; i++) print add[i]
+                }
+            ' "$tmp.lines" "$conf" >"$tmp"
+            run_root cp -f "$tmp" /etc/pacman.conf
+            rm -f "$tmp" "$tmp.lines"
+        fi
     fi
-    if ! $DRY_RUN && ! grep -qxF "HookDir = $OMOCACHY_HOOK_DIR/" /etc/pacman.conf; then
-        echo "Error: could not register $OMOCACHY_HOOK_DIR in /etc/pacman.conf (no [options] section?). Refusing to continue: the limine pacman hooks would run on a $BOOTLOADER machine." >&2
-        exit 1
+    if ! $DRY_RUN; then
+        for l in "HookDir = $PACMAN_HOOK_DIR/" "HookDir = $OMOCACHY_HOOK_DIR/"; do
+            grep -qxF "$l" /etc/pacman.conf && continue
+            echo "Error: could not register \"$l\" in /etc/pacman.conf (no [options] section?). Refusing to continue: the limine pacman hooks would run on a $BOOTLOADER machine." >&2
+            exit 1
+        done
     fi
 }
 
