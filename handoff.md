@@ -201,7 +201,26 @@ systemd initramfs).
   pre-allowance is still what makes the post-reboot firewall survive ssh), the
   snapper assertion being vacuous without a pre-install backup, and the drift
   baseline's reach.
-- **Profile migration hardened** (2026-09-11, plan 044). The import was validated
+- **Renamed to omacachy** (2026-09-11, `ec1edaf`). Everything the project calls
+  its own: the scripts (`bin/omacachy-{doctor,profile-export,profile-import}.sh`),
+  the runtime paths (`~/.local/state/omacachy/`,
+  `/etc/pacman.d/hooks-omacachy/`, `~/.config/uwsm/env.d/50-omacachy-gpu`), the
+  `OMACACHY_*` test seams, the workflow's `name:`, and every reference in the
+  docs and plans. The GitHub repositories keep their names by decision
+  (`d7eeem/omocachy`, `t1nk333r/omocachy`), so clone URLs are unchanged. A
+  pre-rename machine migrates on its next wrapper run — verified in a lab on a
+  guest installed by the old code: one re-run removed the legacy `HookDir` line
+  and directory, `/etc/pacman.conf` line 11 now names the new directory (four
+  hooks regenerated, `pacman -Qkk limine-mkinitcpio-hook` clean), the run stayed
+  at `wrapper-exit=0` / 19 PASS, and `omacachy-doctor.sh` reported 14 PASS /
+  0 FAIL / 2 SKIP. The GPU script deletes a stale `50-omocachy-gpu` when it
+  writes the new file (dry-run prints the removal instead of acting). Existing
+  machines keep their old state directory and its backups — nothing there is
+  migrated, by design. CI stayed green across the rename (run `34645066999`).
+  The station bundle was re-exported under the new name:
+  `~/Work/omacachy-station-bundle/omacachy-profile-luna-20260911-233651.tar.zst`
+  plus its `.sha256`; the older `~/Work/omocachy-station-bundle/` archives are
+  superseded and can be removed once the station is built.
   against the real luna bundle in a lab guest and the run exposed a blocking
   bug: `omacachy-profile-import.sh` aborted under `set -e`/`pipefail` when
   `/run/user/$UID/hypr` did not exist — exactly the station case of importing
