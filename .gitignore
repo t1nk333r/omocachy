@@ -1,1 +1,5 @@
-omarchy/
+# A clone of upstream basecamp/omarchy at the repo root (plans 003/015) — never
+# this repo's own files. Root-anchored on purpose: an unanchored `omarchy/` also
+# ignored fixture trees under tests/fixtures/*/usr/share/omarchy/, which made
+# the suite pass locally and fail on a fresh CI checkout (2026-09-11).
+/omarchy/

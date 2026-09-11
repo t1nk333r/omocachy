@@ -1,0 +1,6 @@
+# Omarchy snapper configuration for the root subvolume (fixture copy).
+SUBVOLUME="/"
+FSTYPE="btrfs"
+TIMELINE_CREATE="no"
+TIMELINE_CLEANUP="yes"
+NUMBER_CLEANUP="yes"
