@@ -48,7 +48,7 @@ run_root pacman -S --needed --noconfirm rocm-core rocm-hip-runtime rocm-smi-lib 
 # 5. Session environment for ROCm: the file it lands in, the
 # skip-user-configs behaviour and the dry-run handling live in
 # write_gpu_session_env (bin/lib/common.sh).
-GPU_ENV_CONTENT='# Written by omocachy bin/amd-rocm.sh (AMD ROCm)
+GPU_ENV_CONTENT='# Written by omacachy bin/amd-rocm.sh (AMD ROCm)
 export LIBVA_DRIVER_NAME=radeonsi
 export ROCM_HOME=/opt/rocm
 export PATH=$ROCM_HOME/bin:$PATH'

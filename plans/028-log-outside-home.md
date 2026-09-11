@@ -24,17 +24,17 @@ Two documented guarantees are false today: README says `--skip-user-configs`
 "keeps the wrapper out of `$HOME` entirely" and `--verify-only` "installs and
 changes nothing", yet the wrapper's first three commands after parsing flags
 are `mkdir -p`, `touch` and `tee` into
-`$HOME/.local/state/omocachy/install-<ts>.log` — unconditionally, including in
+`$HOME/.local/state/omacachy/install-<ts>.log` — unconditionally, including in
 `--dry-run`, which the file itself describes as "no state changes". The
-fixture suite never sees it because every test run sets `OMOCACHY_LOG`.
+fixture suite never sees it because every test run sets `OMACACHY_LOG`.
 
 ## Current state
 
 - `bin/install-omarchy-quattro.sh:158-163`:
   ```bash
-  LOG_FILE="${OMOCACHY_LOG:-${XDG_STATE_HOME:-$HOME/.local/state}/omocachy/install-$TIMESTAMP.log}"
+  LOG_FILE="${OMACACHY_LOG:-${XDG_STATE_HOME:-$HOME/.local/state}/omacachy/install-$TIMESTAMP.log}"
   if ! mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null || ! touch "$LOG_FILE" 2>/dev/null; then
-      LOG_FILE="/tmp/omocachy-install-$TIMESTAMP.log"
+      LOG_FILE="/tmp/omacachy-install-$TIMESTAMP.log"
       touch "$LOG_FILE"
   fi
   exec > >(tee -a "$LOG_FILE") 2>&1
@@ -44,7 +44,7 @@ fixture suite never sees it because every test run sets `OMOCACHY_LOG`.
 - README claims to keep true: search for `out of \`$HOME\` entirely` and
   `installs and changes nothing` (the `--skip-user-configs` and
   `--verify-only` bullets), plus the "**Every run is logged** to
-  `~/.local/state/omocachy/install-<timestamp>.log`" paragraph.
+  `~/.local/state/omacachy/install-<timestamp>.log`" paragraph.
 
 ## Commands you will need
 
@@ -75,9 +75,9 @@ failure scanner.
 if $DRY_RUN || $VERIFY_ONLY || $SKIP_USER_CONFIGS; then
     # These modes promise to leave $HOME alone (README) and to change nothing
     # (dry-run contract). Keep the transcript, but outside $HOME.
-    LOG_FILE="${OMOCACHY_LOG:-/tmp/omocachy-install-$TIMESTAMP.log}"
+    LOG_FILE="${OMACACHY_LOG:-/tmp/omacachy-install-$TIMESTAMP.log}"
 else
-    LOG_FILE="${OMOCACHY_LOG:-${XDG_STATE_HOME:-$HOME/.local/state}/omocachy/install-$TIMESTAMP.log}"
+    LOG_FILE="${OMACACHY_LOG:-${XDG_STATE_HOME:-$HOME/.local/state}/omacachy/install-$TIMESTAMP.log}"
 fi
 ```
 
@@ -89,13 +89,13 @@ still covers the real-install path; `/tmp` needs no `mkdir`).
 ### Step 2: Prove the guarantee on this host
 
 ```bash
-before=$(find "$HOME/.local/state/omocachy" -type f 2>/dev/null | wc -l)
+before=$(find "$HOME/.local/state/omacachy" -type f 2>/dev/null | wc -l)
 bin/install-omarchy-quattro.sh --dry-run --yes | sed -n '/^Log:/p'
-after=$(find "$HOME/.local/state/omocachy" -type f 2>/dev/null | wc -l)
+after=$(find "$HOME/.local/state/omacachy" -type f 2>/dev/null | wc -l)
 echo "before=$before after=$after"
 ```
 
-Expected: the `Log:` line names `/tmp/omocachy-install-<ts>.log`; before ==
+Expected: the `Log:` line names `/tmp/omacachy-install-<ts>.log`; before ==
 after.
 
 **Verify**: as above. (The dev host's existing logs may already be there — the
@@ -109,16 +109,16 @@ comparison is about *new* files.)
 - In the `--verify-only` bullet, "installs and changes nothing" gains the same
   parenthetical.
 - In the "**Every run is logged**" paragraph, state: real installs log to
-  `~/.local/state/omocachy/install-<timestamp>.log`; `--dry-run`,
+  `~/.local/state/omacachy/install-<timestamp>.log`; `--dry-run`,
   `--verify-only` and `--skip-user-configs` log to
-  `/tmp/omocachy-install-<timestamp>.log`.
+  `/tmp/omacachy-install-<timestamp>.log`.
 
-**Verify**: `grep -n 'omocachy-install' README.md` → the qualified paragraph.
+**Verify**: `grep -n 'omacachy-install' README.md` → the qualified paragraph.
 
 ### Step 4: Suite
 
 **Verify**: `tests/run.sh` → `0 failed`; lint gate → exit 0. (Fixtures already
-pin `OMOCACHY_LOG`, so they are unaffected; confirm the `purity` section still
+pin `OMACACHY_LOG`, so they are unaffected; confirm the `purity` section still
 passes — it asserts no state-changing *binary* runs, and this change removes
 one.)
 
@@ -126,17 +126,17 @@ one.)
 
 - Step 2 is the acceptance check; capture its output in your report.
 - If plan 029 has landed, add a case to its `units`/new section asserting that
-  `--dry-run` writes no file under `$HOME/.local/state/omocachy` (same
+  `--dry-run` writes no file under `$HOME/.local/state/omacachy` (same
   before/after pattern, `$WORK`-rooted HOME is not possible — use the real
   `$HOME` and count files, as above, or skip and record why).
 
 ## Done criteria
 
 - [ ] `--dry-run`, `--verify-only` and `--skip-user-configs` create no file
-      under `$HOME/.local/state/omocachy` — demonstrated by Step 2
-- [ ] A real (non-flag) run still logs to `$HOME/.local/state/omocachy` (reason
+      under `$HOME/.local/state/omacachy` — demonstrated by Step 2
+- [ ] A real (non-flag) run still logs to `$HOME/.local/state/omacachy` (reason
       from the code; no need to run a real install)
-- [ ] `OMOCACHY_LOG` still overrides both paths
+- [ ] `OMACACHY_LOG` still overrides both paths
 - [ ] README paragraphs updated
 - [ ] Lint gate exit 0; `tests/run.sh` `0 failed`
 - [ ] `plans/README.md` status row updated

@@ -6,7 +6,7 @@ set -euo pipefail
 # through to the privileged path.
 #
 # Test seam (defaults to "off", so normal operation is unchanged):
-#   OMOCACHY_GPU_TYPE=<nvidia|amd|none>  skip the lspci probe and dispatch on
+#   OMACACHY_GPU_TYPE=<nvidia|amd|none>  skip the lspci probe and dispatch on
 #                                        this value (see tests/run.sh)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -16,7 +16,7 @@ source "$SCRIPT_DIR/lib/common.sh"
 # --dry-run only; the vendor script re-parses the flag itself.
 parse_dry_run_flag "$@"
 
-GPU_TYPE="${OMOCACHY_GPU_TYPE:-$(bash "$SCRIPT_DIR/gpu-detect.sh")}"
+GPU_TYPE="${OMACACHY_GPU_TYPE:-$(bash "$SCRIPT_DIR/gpu-detect.sh")}"
 
 case "$GPU_TYPE" in
 nvidia)

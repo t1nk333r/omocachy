@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# common.sh — helpers shared by omocachy's scripts. Sourced, never executed.
+# common.sh — helpers shared by omacachy's scripts. Sourced, never executed.
 #
 # The dry-run contract: every state-changing command in this project flows
 # through one of the helpers below. In dry-run mode they print the command
@@ -7,8 +7,8 @@
 # can enforce "no sudo outside run_root/write_root_file/append_root_file"
 # with a single grep and "no state changes in --dry-run" by inspection.
 
-[[ -n ${OMOCACHY_COMMON_SH:-} ]] && return 0
-OMOCACHY_COMMON_SH=1
+[[ -n ${OMACACHY_COMMON_SH:-} ]] && return 0
+OMACACHY_COMMON_SH=1
 
 # Scripts set this from their own --dry-run flag before calling the helpers.
 DRY_RUN=${DRY_RUN:-false}
@@ -90,19 +90,30 @@ write_user_file() {
 # the user's own file (often dotfile-managed) and is never appended to; uwsm
 # also sources env.d/* (uwsm(1) CONFIGURATION: "uwsm/env, uwsm/env.d/*"),
 # which gives the scripts a file they own outright and can rewrite on re-runs.
-OMOCACHY_GPU_ENV_FILE="$HOME/.config/uwsm/env.d/50-omocachy-gpu"
+OMACACHY_GPU_ENV_FILE="$HOME/.config/uwsm/env.d/50-omacachy-gpu"
 
 # write_gpu_session_env LABEL CONTENT — write the vendor's session
-# environment, or print it under OMOCACHY_SKIP_USER_CONFIGS=1, where $HOME is
+# environment, or print it under OMACACHY_SKIP_USER_CONFIGS=1, where $HOME is
 # off limits. LABEL names the vendor in the confirmation line ("NVIDIA").
 write_gpu_session_env() {
     local label="$1" content="$2"
-    if [[ ${OMOCACHY_SKIP_USER_CONFIGS:-0} == 1 ]]; then
-        info "--skip-user-configs: not writing $OMOCACHY_GPU_ENV_FILE. Recommended session environment (add to your own uwsm env or env.d file):"
+    if [[ ${OMACACHY_SKIP_USER_CONFIGS:-0} == 1 ]]; then
+        info "--skip-user-configs: not writing $OMACACHY_GPU_ENV_FILE. Recommended session environment (add to your own uwsm env or env.d file):"
         printf '%s\n' "$content"
     else
-        printf '%s\n' "$content" | write_user_file "$OMOCACHY_GPU_ENV_FILE"
-        info "$label session environment written to $OMOCACHY_GPU_ENV_FILE"
+        printf '%s\n' "$content" | write_user_file "$OMACACHY_GPU_ENV_FILE"
+        # Pre-rename machines have 50-omocachy-gpu; uwsm sources every env.d
+        # file, so a stale copy would keep exporting the same variables.
+        local legacy_env="$HOME/.config/uwsm/env.d/50-omocachy-gpu"
+        if [[ -e $legacy_env ]]; then
+            if $DRY_RUN; then
+                echo "DRYRUN: rm -f $legacy_env"
+            else
+                rm -f "$legacy_env"
+                info "removed the pre-rename $legacy_env"
+            fi
+        fi
+        info "$label session environment written to $OMACACHY_GPU_ENV_FILE"
     fi
 }
 

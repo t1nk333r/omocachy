@@ -1,8 +1,8 @@
-name: omocachy
+name: omacachy
 
 on:
   push:
-    branches: [main, omocachy]
+    branches: [main, omacachy]
   pull_request:
   workflow_dispatch:
 

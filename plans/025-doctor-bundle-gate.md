@@ -1,4 +1,4 @@
-# Plan 025: Make `omocachy-doctor.sh --bundle` fail on an unreadable manifest
+# Plan 025: Make `omacachy-doctor.sh --bundle` fail on an unreadable manifest
 
 > **Executor instructions**: Follow this plan step by step. Run every
 > verification command and confirm the expected result before moving on. If any
@@ -6,7 +6,7 @@
 > the status row for this plan in `plans/README.md` (or leave it to the
 > reviewer).
 >
-> **Drift check (run first)**: `git diff --stat e80b564..HEAD -- bin/omocachy-doctor.sh bin/lib/profile.sh`
+> **Drift check (run first)**: `git diff --stat e80b564..HEAD -- bin/omacachy-doctor.sh bin/lib/profile.sh`
 > On a mismatch with the excerpts below, treat it as a STOP condition.
 
 ## Status
@@ -21,7 +21,7 @@
 
 ## Why this matters
 
-`bin/omocachy-doctor.sh --bundle` is the post-migration gate the README sells;
+`bin/omacachy-doctor.sh --bundle` is the post-migration gate the README sells;
 the importer's `verify` stage takes its exit code as the migration's verdict.
 But `profile_manifest` pipes `jq` through `2>/dev/null`, so a truncated,
 half-copied or `{}` manifest yields empty streams and every versus-bundle loop
@@ -37,7 +37,7 @@ header names. A bundle whose metadata was never read reports green.
       jq -r "$2 // empty" "$1/manifest.json" 2>/dev/null
   }
   ```
-- `bin/omocachy-doctor.sh:241-250` and onward:
+- `bin/omacachy-doctor.sh:241-250` and onward:
   ```bash
   if [[ -n $BUNDLE ]]; then
       echo ""
@@ -55,7 +55,7 @@ header names. A bundle whose metadata was never read reports green.
           pass "every plugin in the bundle is present on this machine"
       fi
   ```
-- The import does validate first (`bin/omocachy-profile-import.sh:120-121`):
+- The import does validate first (`bin/omacachy-profile-import.sh:120-121`):
   ```bash
   SCHEMA="$(profile_manifest "$BUNDLE" .schema)"
   [[ $SCHEMA == "$PROFILE_SCHEMA" ]] || die "bundle schema $SCHEMA, this script speaks $PROFILE_SCHEMA."
@@ -72,7 +72,7 @@ header names. A bundle whose metadata was never read reports green.
 
 ## Scope
 
-**In scope**: `bin/omocachy-doctor.sh`, one regression case in `tests/run.sh`.
+**In scope**: `bin/omacachy-doctor.sh`, one regression case in `tests/run.sh`.
 **Out of scope**: `profile_manifest` itself (other callers rely on its
 tolerant behaviour after their own schema checks), the import's stages.
 
@@ -101,7 +101,7 @@ Indent the existing checks into the `else` branch (mechanical re-indent; the
 doctor's style is 4 spaces). Keep the section's human framing ("--- versus
 bundle ---") unchanged.
 
-**Verify**: `bash -n bin/omocachy-doctor.sh` → exit 0.
+**Verify**: `bash -n bin/omacachy-doctor.sh` → exit 0.
 
 ### Step 2: Same gate for the load-bearing plugin check
 
@@ -109,27 +109,27 @@ Inside the validated branch, nothing further is needed — the loops now only ru
 when the arrays exist. Confirm no other versus-bundle code reads the manifest
 outside the `else` (grep for `profile_manifest` in the file).
 
-**Verify**: `grep -n 'profile_manifest' bin/omocachy-doctor.sh` → every hit is
+**Verify**: `grep -n 'profile_manifest' bin/omacachy-doctor.sh` → every hit is
 inside the validated branch.
 
 ### Step 3: Empty-manifest check
 
 ```bash
 d=$(mktemp -d); printf '{}\n' >"$d/manifest.json"
-bin/omocachy-doctor.sh --bundle "$d"; echo "exit=$?"
+bin/omacachy-doctor.sh --bundle "$d"; echo "exit=$?"
 ```
 
 Expected: one `FAIL` line naming the manifest, `exit=1`, and no "every plugin
 …" PASS line.
 
 **Verify**: as above; then a second run against a real bundle directory
-produced by `bin/omocachy-profile-export.sh --out <dir> --dry-run`… note the
+produced by `bin/omacachy-profile-export.sh --out <dir> --dry-run`… note the
 dry run writes nothing, so instead copy any existing bundle under
-`~/.local/state/omocachy/` if present, or construct a minimal valid one:
+`~/.local/state/omacachy/` if present, or construct a minimal valid one:
 
 ```bash
 printf '{"schema":1,"source":{"host":"h","user":"u","home":"/home/u"},"payload":{"captured":[]},"plugins":[],"packages":[]}\n' >"$d/manifest.json"
-bin/omocachy-doctor.sh --bundle "$d"; echo "exit=$?"
+bin/omacachy-doctor.sh --bundle "$d"; echo "exit=$?"
 ```
 
 Expected: no manifest FAIL; the versus-bundle section runs (empty lists →
@@ -161,7 +161,7 @@ the FAIL text (model on the harness's `ok`/`bad` pattern).
 
 - The doctor's manifest layout differs from the keys used in the gate
   (`jq '.schema'`, `.payload.captured`, `.plugins`, `.packages`) — re-derive
-  from `bin/omocachy-profile-export.sh`'s `write_manifest` and report the
+  from `bin/omacachy-profile-export.sh`'s `write_manifest` and report the
   mismatch instead of guessing.
 - The code no longer matches the excerpts (drift).
 

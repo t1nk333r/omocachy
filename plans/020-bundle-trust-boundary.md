@@ -6,7 +6,7 @@
 > the status row for this plan in `plans/README.md` (or leave it to the
 > reviewer if they said they maintain the index).
 >
-> **Drift check (run first)**: `git diff --stat e80b564..HEAD -- bin/omocachy-profile-import.sh bin/omocachy-profile-export.sh bin/lib/profile.sh`
+> **Drift check (run first)**: `git diff --stat e80b564..HEAD -- bin/omacachy-profile-import.sh bin/omacachy-profile-export.sh bin/lib/profile.sh`
 > On a mismatch with the excerpts below, treat it as a STOP condition.
 
 ## Status
@@ -33,7 +33,7 @@ behaviour (the repo's own exporter emits relative, `..`-free paths).
 
 ## Current state
 
-- `bin/omocachy-profile-import.sh` — restores a bundle into `$HOME`.
+- `bin/omacachy-profile-import.sh` — restores a bundle into `$HOME`.
   - `:112-118` sets `BUNDLE=$(profile_resolve_bundle ...)`; `:120-121` checks
     the schema; `:129`:
     ```bash
@@ -63,7 +63,7 @@ behaviour (the repo's own exporter emits relative, `..`-free paths).
   - `:133-152` `profile_read_paths` — the exporter-side list reader (its output
     is the contract for what a legitimate manifest entry looks like: a
     non-empty relative path).
-- `bin/omocachy-profile-export.sh:436` writes the digest the import never reads:
+- `bin/omacachy-profile-export.sh:436` writes the digest the import never reads:
   ```bash
   (cd "$(dirname "$ARCHIVE_PATH")" && sha256sum "$(basename "$ARCHIVE_PATH")" >"$ARCHIVE_PATH.sha256")
   ```
@@ -78,8 +78,8 @@ behaviour (the repo's own exporter emits relative, `..`-free paths).
 
 ## Scope
 
-**In scope**: `bin/lib/profile.sh`, `bin/omocachy-profile-import.sh`,
-`bin/omocachy-profile-export.sh` (remote scrubbing only), `tests/run.sh` (one
+**In scope**: `bin/lib/profile.sh`, `bin/omacachy-profile-import.sh`,
+`bin/omacachy-profile-export.sh` (remote scrubbing only), `tests/run.sh` (one
 regression case).
 
 **Out of scope**: the doctor (plan 025), the secret sweep (plan 026), the
@@ -120,7 +120,7 @@ profile_rel_path_ok() {
 
 ### Step 2: Reject unsafe manifest entries in the import
 
-In `bin/omocachy-profile-import.sh`, directly after the `mapfile` at `:129`,
+In `bin/omacachy-profile-import.sh`, directly after the `mapfile` at `:129`,
 validate and refuse:
 
 ```bash
@@ -139,8 +139,8 @@ Also sanitise the parking target: replace `target="$HOME/$hs.from-$SRC_HOST"`
 with a sanitised host, e.g. `SRC_HOST_SAFE="${SRC_HOST//[^A-Za-z0-9._-]/_}"`, and
 use that in the target (and in the dry-run echo).
 
-**Verify**: `grep -n 'profile_rel_path_ok' bin/omocachy-profile-import.sh` → the
-validation loop; `bash -n bin/omocachy-profile-import.sh` → exit 0.
+**Verify**: `grep -n 'profile_rel_path_ok' bin/omacachy-profile-import.sh` → the
+validation loop; `bash -n bin/omacachy-profile-import.sh` → exit 0.
 
 ### Step 3: Guard the generated rollback
 
@@ -155,7 +155,7 @@ Generate it once, before the `restore %q`/`drop %q` lines. (With Step 2 in
 place this is defence in depth; it is what makes a hand-edited
 `restored.tsv` harmless.)
 
-**Verify**: `sed -n '/refusing unsafe path/p' bin/omocachy-profile-import.sh` →
+**Verify**: `sed -n '/refusing unsafe path/p' bin/omacachy-profile-import.sh` →
 one match inside `write_rollback`.
 
 ### Step 4: Verify the digest and extract safely
@@ -189,10 +189,10 @@ then run the extraction path (e.g. `bash -c 'source bin/lib/profile.sh; profile_
   ```bash
   remote="$(git -C "$p" remote get-url origin 2>/dev/null | sed 's|^\([a-z+][a-z+]*://\)[^/@]*@|\1|' || echo '-')"
   ```
-- In `bin/omocachy-profile-export.sh`, apply the same `sed` where the yadm
+- In `bin/omacachy-profile-export.sh`, apply the same `sed` where the yadm
   origin URL is captured (search `yadm_remote`).
 
-**Verify**: `grep -n 'sed .*@' bin/lib/profile.sh bin/omocachy-profile-export.sh` → both sites; a manual check: `printf 'https://u:t@h/r\n' | sed 's|^\([a-z+][a-z+]*://\)[^/@]*@|\1|'` → `https://h/r`.
+**Verify**: `grep -n 'sed .*@' bin/lib/profile.sh bin/omacachy-profile-export.sh` → both sites; a manual check: `printf 'https://u:t@h/r\n' | sed 's|^\([a-z+][a-z+]*://\)[^/@]*@|\1|'` → `https://h/r`.
 
 ### Step 6: Regression case in `tests/run.sh`
 
@@ -208,7 +208,7 @@ output contains `unsafe path`. Use the harness's `ok`/`bad` helpers.
 
 - The new `tests/run.sh` case above is the regression: it must fail against the
   current code and pass after Step 2.
-- Happy path: an untouched bundle from `bin/omocachy-profile-export.sh --out`
+- Happy path: an untouched bundle from `bin/omacachy-profile-export.sh --out`
   still imports in `--dry-run` mode (run it in the lab VM if available; on a
   dev host at least confirm the dry run prints the merge plan and exits 0).
 

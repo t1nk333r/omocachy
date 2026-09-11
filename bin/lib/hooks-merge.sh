@@ -1,5 +1,5 @@
 #!/bin/bash
-# omocachy — mkinitcpio HOOKS reconciliation.
+# omacachy — mkinitcpio HOOKS reconciliation.
 #
 # Sourced by bin/install-omarchy-quattro.sh and by tests/run.sh. Defining the
 # merge here (instead of inline in the installer) is what makes it testable
@@ -95,7 +95,7 @@ hooks_conflict() {
 render_keep_hooks_conf() {
     local captured="$1"
     cat <<EOF
-# Written by omocachy install-omarchy-quattro.sh -- re-run the installer
+# Written by omacachy install-omarchy-quattro.sh -- re-run the installer
 # instead of editing; it re-captures the array below.
 #
 # Sourced by mkinitcpio after omarchy_hooks.conf (conf.d files load in

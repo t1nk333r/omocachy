@@ -13,15 +13,15 @@ set -Eeuo pipefail
 # plans/016-quattro-verification-and-sysroot-seam.md.
 #
 # Test seams (all default to "off", so normal operation is unchanged):
-#   OMOCACHY_SYSROOT=<dir>          read host state from <dir> instead of /
+#   OMACACHY_SYSROOT=<dir>          read host state from <dir> instead of /
 #                                   (requires --dry-run; see tests/run.sh)
-#   OMOCACHY_DECISIONS_FILE=<path>  append key=value decision records
-#   OMOCACHY_LOG=<path>             install log location
+#   OMACACHY_DECISIONS_FILE=<path>  append key=value decision records
+#   OMACACHY_LOG=<path>             install log location
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HOOKS_LIB="$SCRIPT_DIR/lib/hooks-merge.sh"
 if [[ ! -r $HOOKS_LIB ]]; then
-    echo "Error: $HOOKS_LIB not found. Run this script from a full omocachy checkout." >&2
+    echo "Error: $HOOKS_LIB not found. Run this script from a full omacachy checkout." >&2
     exit 1
 fi
 # shellcheck source=bin/lib/hooks-merge.sh
@@ -56,16 +56,16 @@ VERIFY_ONLY=false
 # decision logic can be exercised against a fixture tree (tests/fixtures/*)
 # on a machine that is not CachyOS. Writes are untouched: they are what
 # --dry-run already prints, and --dry-run is mandatory under a sysroot.
-# Unset OMOCACHY_SYSROOT => host_path is the identity and behaviour is
+# Unset OMACACHY_SYSROOT => host_path is the identity and behaviour is
 # byte-for-byte what it was before the seam existed.
 # ---------------------------------------------------------------------------
-SYSROOT="${OMOCACHY_SYSROOT:-}"
+SYSROOT="${OMACACHY_SYSROOT:-}"
 SYSROOT="${SYSROOT%/}"
 host_path() { printf '%s%s' "$SYSROOT" "$1"; }
 
 # Decision record: key=value lines a test can assert on, so the suite checks
 # the branch taken rather than the wording of a log line.
-DECISIONS_FILE="${OMOCACHY_DECISIONS_FILE:-}"
+DECISIONS_FILE="${OMACACHY_DECISIONS_FILE:-}"
 [[ -z $DECISIONS_FILE ]] || : >"$DECISIONS_FILE"
 decide() {
     [[ -z $DECISIONS_FILE ]] || printf '%s=%s\n' "$1" "$2" >>"$DECISIONS_FILE"
@@ -125,12 +125,12 @@ done
 if $DRY_RUN || $VERIFY_ONLY || $SKIP_USER_CONFIGS; then
     # These modes promise to leave $HOME alone (README) and to change nothing
     # (dry-run contract). Keep the transcript, but outside $HOME.
-    LOG_FILE="${OMOCACHY_LOG:-/tmp/omocachy-install-$TIMESTAMP.log}"
+    LOG_FILE="${OMACACHY_LOG:-/tmp/omacachy-install-$TIMESTAMP.log}"
 else
-    LOG_FILE="${OMOCACHY_LOG:-${XDG_STATE_HOME:-$HOME/.local/state}/omocachy/install-$TIMESTAMP.log}"
+    LOG_FILE="${OMACACHY_LOG:-${XDG_STATE_HOME:-$HOME/.local/state}/omacachy/install-$TIMESTAMP.log}"
 fi
 if ! mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null || ! touch "$LOG_FILE" 2>/dev/null; then
-    LOG_FILE="/tmp/omocachy-install-$TIMESTAMP.log"
+    LOG_FILE="/tmp/omacachy-install-$TIMESTAMP.log"
     touch "$LOG_FILE"
 fi
 exec > >(tee -a "$LOG_FILE") 2>&1
@@ -224,11 +224,11 @@ CURRENT_STEP="preflight"
 
 if [[ -n $SYSROOT ]]; then
     if ! $DRY_RUN; then
-        echo "Error: OMOCACHY_SYSROOT is a test seam and requires --dry-run." >&2
+        echo "Error: OMACACHY_SYSROOT is a test seam and requires --dry-run." >&2
         exit 1
     fi
     if [[ ! -d $SYSROOT ]]; then
-        echo "Error: OMOCACHY_SYSROOT=$SYSROOT is not a directory." >&2
+        echo "Error: OMACACHY_SYSROOT=$SYSROOT is not a directory." >&2
         exit 1
     fi
     echo "(sysroot mode: host state is read from $SYSROOT; EFI-variable and systemd probes are skipped)"
@@ -547,7 +547,7 @@ OMARCHY_FAILLOCK_SRC=/usr/share/omarchy/etc-overrides/security-faillock.conf
 # (`pacman -Ql omarchy`), which is why a same-named file in /etc/pacman.d/
 # hooks (or a later HookDir) can override it and why pacman -Qkk stays clean.
 UPDATE_GUARD_HOOK=/usr/share/libalpm/hooks/00-omarchy-update-guard.hook
-OMOCACHY_HOOK_DIR=/etc/pacman.d/hooks-omocachy
+OMACACHY_HOOK_DIR=/etc/pacman.d/hooks-omacachy
 OMARCHY_ISO_CLOSURE=(
     cups avahi docker power-profiles-daemon kernel-modules-hook
     ufw ufw-docker bluez bluez-utils plocate xdg-user-dirs mise-bin chromium
@@ -748,14 +748,14 @@ check_hookdir_override() {
         grep -qxF "HookDir = $PACMAN_HOOK_DIR/" /etc/pacman.conf || return 1
     fi
     [[ $BOOTLOADER != "limine" ]] || return 0
-    grep -qxF "HookDir = $OMOCACHY_HOOK_DIR/" /etc/pacman.conf || return 1
-    [[ -f $OMOCACHY_HOOK_DIR/90-mkinitcpio-install.hook ]] || return 1
-    grep -q '/usr/share/libalpm/scripts/mkinitcpio install' "$OMOCACHY_HOOK_DIR/90-mkinitcpio-install.hook" || return 1
+    grep -qxF "HookDir = $OMACACHY_HOOK_DIR/" /etc/pacman.conf || return 1
+    [[ -f $OMACACHY_HOOK_DIR/90-mkinitcpio-install.hook ]] || return 1
+    grep -q '/usr/share/libalpm/scripts/mkinitcpio install' "$OMACACHY_HOOK_DIR/90-mkinitcpio-install.hook" || return 1
     # The PATH pin is what keeps /usr/local/bin/mkinitcpio (the
     # limine-mkinitcpio-hook shim) out of the alpm script's unqualified
     # `mkinitcpio` lookup. Without it the hook still rebuilds the initramfs
     # and then runs limine-mkinitcpio anyway.
-    grep -q '^Exec = /usr/bin/env PATH=/usr/bin ' "$OMOCACHY_HOOK_DIR/90-mkinitcpio-install.hook"
+    grep -q '^Exec = /usr/bin/env PATH=/usr/bin ' "$OMACACHY_HOOK_DIR/90-mkinitcpio-install.hook"
 }
 # Can this check reach root without a prompt? Probed on its own, because the
 # alternative -- inferring it from the exit status of the command being run --
@@ -891,7 +891,7 @@ run_assertion_suite() {
     assert "/etc/security/faillock.conf is Omarchy's (accepted deliberately: PAM is edited to match)" check_faillock
     assert "$ZZ_HOOKS_CONF exists and the effective HOOKS are bootable-shaped (encryption hook matches the cmdline flavour, plymouth and an overlayfs hook present)" check_hooks
     assert "pacman -Qkk limine-mkinitcpio-hook is clean (no packaged file was edited)" check_limine_hook_pkg
-    assert "non-limine machine overrides the limine pacman hooks from $OMOCACHY_HOOK_DIR and keeps stock initramfs rebuilds" check_hookdir_override
+    assert "non-limine machine overrides the limine pacman hooks from $OMACACHY_HOOK_DIR and keeps stock initramfs rebuilds" check_hookdir_override
     assert "non-limine machine has no Limine config or UKI on /boot (the /usr/local/bin/mkinitcpio shim did not run limine-mkinitcpio)" check_no_limine_artifacts
     assert "non-limine machine has limine-snapper-sync.service disabled" check_limine_service
     assert "$LIMINE_DEFAULT carries the ENABLE_UKI/BOOT_ORDER/TARGET_OS_NAME overrides on a Limine host" check_limine_default
@@ -1000,7 +1000,7 @@ fi
 # Result: no packaged file is touched (`pacman -Qkk limine-mkinitcpio-hook`
 # stays clean), stock initramfs rebuilds keep happening, and the Limine EFI
 # deployment/entry hooks are inert. Restore path: delete
-# /etc/pacman.d/hooks-omocachy and the two HookDir lines from /etc/pacman.conf.
+# /etc/pacman.d/hooks-omacachy and the two HookDir lines from /etc/pacman.conf.
 # ---------------------------------------------------------------------------
 
 ensure_hookdir_lines() {
@@ -1008,8 +1008,32 @@ ensure_hookdir_lines() {
     local -a missing=()
     local have_stock=false have_ours=false
     conf="$(host_path /etc/pacman.conf)"
+
+    # Pre-rename machines (before 2026-09-11) carry the old HookDir line and its
+    # directory. Both are this script's own — it creates and populates them —
+    # and both are regenerated under $OMACACHY_HOOK_DIR, so drop them here:
+    # leaving the line makes pacman parse a directory that no longer exists, and
+    # leaving both would have two directories claim the same hook names.
+    local legacy_dir=/etc/pacman.d/hooks-omocachy legacy_line="HookDir = /etc/pacman.d/hooks-omocachy/"
+    if grep -qxF "$legacy_line" "$conf" 2>/dev/null; then
+        echo "Removing the pre-rename $legacy_line from /etc/pacman.conf."
+        if $DRY_RUN; then
+            echo "DRYRUN: sudo sed -i '\\|^$legacy_line\$|d' /etc/pacman.conf"
+        else
+            run_root sed -i "\\|^$legacy_line\$|d" /etc/pacman.conf
+        fi
+    fi
+    if [[ -d $(host_path "$legacy_dir") ]]; then
+        echo "Removing the pre-rename hook directory $legacy_dir (its hooks are regenerated in $OMACACHY_HOOK_DIR)."
+        if $DRY_RUN; then
+            echo "DRYRUN: sudo rm -rf $legacy_dir"
+        else
+            run_root rm -rf "$legacy_dir"
+        fi
+    fi
+
     grep -qxF "HookDir = $PACMAN_HOOK_DIR/" "$conf" 2>/dev/null && have_stock=true
-    grep -qxF "HookDir = $OMOCACHY_HOOK_DIR/" "$conf" 2>/dev/null && have_ours=true
+    grep -qxF "HookDir = $OMACACHY_HOOK_DIR/" "$conf" 2>/dev/null && have_ours=true
     if $have_stock && $have_ours; then
         echo "HookDir lines already registered in /etc/pacman.conf."
         return 0
@@ -1020,7 +1044,7 @@ ensure_hookdir_lines() {
     # there) silently stops firing; and ours has to be named or the limine
     # hooks are not shadowed.
     $have_stock || missing+=("HookDir = $PACMAN_HOOK_DIR/")
-    $have_ours || missing+=("HookDir = $OMOCACHY_HOOK_DIR/")
+    $have_ours || missing+=("HookDir = $OMACACHY_HOOK_DIR/")
     printf 'Adding to /etc/pacman.conf: %s\n' "${missing[*]}"
     if ! grep -qE '^[[:space:]]*HookDir[[:space:]]*=' "$conf" 2>/dev/null; then
         # No HookDir at all: pacman's default is the single directory
@@ -1039,7 +1063,7 @@ ensure_hookdir_lines() {
         # because appending after it would move the stock directory later in
         # the search path and re-arm the limine hooks this policy keeps inert.
         if $have_ours; then
-            anchor="$(grep -nxF "HookDir = $OMOCACHY_HOOK_DIR/" "$conf" | head -1 | cut -d: -f1)"
+            anchor="$(grep -nxF "HookDir = $OMACACHY_HOOK_DIR/" "$conf" | head -1 | cut -d: -f1)"
             where=before
         else
             anchor="$(grep -nE '^[[:space:]]*HookDir[[:space:]]*=' "$conf" | tail -1 | cut -d: -f1)"
@@ -1066,7 +1090,7 @@ ensure_hookdir_lines() {
         fi
     fi
     if ! $DRY_RUN; then
-        for l in "HookDir = $PACMAN_HOOK_DIR/" "HookDir = $OMOCACHY_HOOK_DIR/"; do
+        for l in "HookDir = $PACMAN_HOOK_DIR/" "HookDir = $OMACACHY_HOOK_DIR/"; do
             grep -qxF "$l" /etc/pacman.conf && continue
             echo "Error: could not register \"$l\" in /etc/pacman.conf (no [options] section?). Refusing to continue: the limine pacman hooks would run on a $BOOTLOADER machine." >&2
             exit 1
@@ -1076,8 +1100,8 @@ ensure_hookdir_lines() {
 
 write_inert_hook() {
     local name="$1"
-    write_root_file "$OMOCACHY_HOOK_DIR/$name" <<EOF
-# Written by omocachy install-omarchy-quattro.sh: overrides the
+    write_root_file "$OMACACHY_HOOK_DIR/$name" <<EOF
+# Written by omacachy install-omarchy-quattro.sh: overrides the
 # limine-mkinitcpio-hook hook of the same name on a machine whose bootloader
 # is $BOOTLOADER, not Limine. This file shadows it by living in a HookDir
 # that pacman reads later; the packaged hook itself is untouched.
@@ -1088,10 +1112,10 @@ Type = Path
 Operation = Install
 Operation = Upgrade
 Operation = Remove
-Target = var/lib/omocachy/never-matches
+Target = var/lib/omacachy/never-matches
 
 [Action]
-Description = Disabled by omocachy (non-limine bootloader)
+Description = Disabled by omacachy (non-limine bootloader)
 When = PostTransaction
 Exec = /usr/bin/true
 EOF
@@ -1102,8 +1126,8 @@ apply_boot_hook_policy() {
         echo "limine is the active bootloader; leaving Omarchy's limine integration (limine-snapper-sync, limine-mkinitcpio-hook) active."
         return 0
     fi
-    echo "Active bootloader is '$BOOTLOADER', not limine; shadowing the limine pacman hooks from $OMOCACHY_HOOK_DIR."
-    run_root mkdir -p "$OMOCACHY_HOOK_DIR"
+    echo "Active bootloader is '$BOOTLOADER', not limine; shadowing the limine pacman hooks from $OMACACHY_HOOK_DIR."
+    run_root mkdir -p "$OMACACHY_HOOK_DIR"
     ensure_hookdir_lines
 
     # Stock initramfs rebuilds: a copy of mkinitcpio's own hook, which the
@@ -1122,7 +1146,7 @@ apply_boot_hook_policy() {
     # kernel, both came back). Pinning PATH to /usr/bin for the hook keeps the
     # shim out of the lookup without touching the packaged file.
     local stock=/usr/share/libalpm/hooks/90-mkinitcpio-install.hook
-    local override="$OMOCACHY_HOOK_DIR/90-mkinitcpio-install.hook"
+    local override="$OMACACHY_HOOK_DIR/90-mkinitcpio-install.hook"
     if [[ -f $(host_path "$stock") ]]; then
         run_root cp -f "$stock" "$override"
         run_root sed -i \
@@ -1222,7 +1246,7 @@ fi
 if [[ -f $(host_path "$PRESERVE_DIR/os-release") || $PRE_OS_RELEASE_ID != "omarchy" ]]; then
     run_root mkdir -p /etc/pacman.d/hooks
     write_root_file "$PRESERVE_HOOK" <<EOF
-# Written by omocachy install-omarchy-quattro.sh.
+# Written by omacachy install-omarchy-quattro.sh.
 # omarchy-settings' post_install/post_upgrade scriptlet (_etc_overrides_apply)
 # does \`rm -f /etc/os-release; cp -f .../etc-overrides/os-release /etc/os-release\`
 # and \`cp -f .../etc-overrides/nsswitch.conf /etc/nsswitch.conf\` on every
@@ -1236,7 +1260,7 @@ Type = Package
 Target = omarchy-settings
 
 [Action]
-Description = Restoring CachyOS /etc/os-release and /etc/nsswitch.conf (omocachy)...
+Description = Restoring CachyOS /etc/os-release and /etc/nsswitch.conf (omacachy)...
 When = PostTransaction
 Exec = /usr/bin/cp -f -t /etc $PRESERVE_DIR/os-release $PRESERVE_DIR/nsswitch.conf
 EOF
@@ -1288,7 +1312,7 @@ if [[ $BOOTLOADER == "limine" ]]; then
     fi
     if [[ -n $limine_block ]]; then
         {
-            printf '\n# >>> omocachy install-omarchy-quattro.sh >>>\n'
+            printf '\n# >>> omacachy install-omarchy-quattro.sh >>>\n'
             printf '# /etc/default/limine loads last (limine-common-functions load_config), so these\n'
             printf '# override the omarchy-settings drop-ins in /etc/limine-entry-tool.d/omarchy-*.conf\n'
             printf '# (TARGET_OS_NAME="Omarchy", ENABLE_UKI=yes, BOOT_ORDER without *lts).\n'
@@ -1300,7 +1324,7 @@ if [[ $BOOTLOADER == "limine" ]]; then
             printf '# which is what keeps an encrypted boot on the themed Plymouth LUKS prompt\n'
             printf '# instead of dropping to an unthemed text one, and the splash arguments.\n'
             printf '#   KERNEL_CMDLINE[default]+=" your args here"\n'
-            printf '%s# <<< omocachy <<<\n' "$limine_block"
+            printf '%s# <<< omacachy <<<\n' "$limine_block"
         } | append_root_file "$LIMINE_DEFAULT"
     else
         echo "$LIMINE_DEFAULT already sets TARGET_OS_NAME, ENABLE_UKI and BOOT_ORDER; leaving it alone."
@@ -1678,13 +1702,13 @@ elif grep -qE '^\s*OMARCHY_PATH=' "$(host_path /etc/environment)" 2>/dev/null; t
     decide omarchy_path_env "already-set"
 else
     {
-        printf '\n# >>> omocachy install-omarchy-quattro.sh >>>\n'
+        printf '\n# >>> omacachy install-omarchy-quattro.sh >>>\n'
         printf '# Read by pam_env, so every shell and session type gets it -- not just the\n'
         printf '# login shells /etc/profile.d/omarchy.sh covers and the interactive shells\n'
         printf '# /etc/skel/.bashrc covers. Without it `omarchy update` dies in\n'
         printf '# omarchy-update-dev with "OMARCHY_PATH: unbound variable".\n'
         printf 'OMARCHY_PATH=/usr/share/omarchy\n'
-        printf '# <<< omocachy <<<\n'
+        printf '# <<< omacachy <<<\n'
     } | append_root_file /etc/environment
     decide omarchy_path_env "written"
 fi
@@ -1812,7 +1836,7 @@ seed_user_configs() {
                 echo "DRYRUN: omarchy-reinstall-configs (with a no-op omarchy-refresh-limine first on PATH)"
             else
                 shim_dir="$(mktemp -d)"
-                printf '#!/bin/sh\necho "omocachy: skipping omarchy-refresh-limine (bootloader is %s)"\n' "$BOOTLOADER" >"$shim_dir/omarchy-refresh-limine"
+                printf '#!/bin/sh\necho "omacachy: skipping omarchy-refresh-limine (bootloader is %s)"\n' "$BOOTLOADER" >"$shim_dir/omarchy-refresh-limine"
                 chmod +x "$shim_dir/omarchy-refresh-limine"
                 PATH="$shim_dir:$PATH" omarchy-reinstall-configs
                 rm -rf "$shim_dir"
@@ -1838,13 +1862,13 @@ seed_user_configs() {
     # (default/bash/init). Lives in the user's fish config so it survives
     # upstream changes.
     local fish_conf_dir="$HOME/.config/fish/conf.d"
-    local fish_conf_file="$fish_conf_dir/omocachy.fish"
+    local fish_conf_file="$fish_conf_dir/omacachy.fish"
     if $DRY_RUN; then
         echo "DRYRUN: write $fish_conf_file"
     else
         mkdir -p "$fish_conf_dir"
         cat >"$fish_conf_file" <<'EOF'
-# Added by omocachy
+# Added by omacachy
 if status is-interactive
     command -q mise; and mise activate fish | source
     command -q zoxide; and zoxide init fish | source
@@ -1868,16 +1892,16 @@ fi
 # GPU dispatch: this repo's vendor dispatcher (nvidia.sh respects whatever
 # CachyOS driver is present; amd-rocm.sh installs the AMDGPU/ROCm profile).
 # Runs after the pacman.conf restore above so its own internal `sudo pacman
-# -S` calls see the CachyOS repos. OMOCACHY_SKIP_USER_CONFIGS tells the
+# -S` calls see the CachyOS repos. OMACACHY_SKIP_USER_CONFIGS tells the
 # vendor scripts to print their session-env lines instead of writing
-# ~/.config/uwsm/env.d/50-omocachy-gpu.
+# ~/.config/uwsm/env.d/50-omacachy-gpu.
 step "GPU setup"
 case "$GPU_TYPE" in
     nvidia) echo "Detected NVIDIA GPU -> dispatch target: bin/nvidia.sh (via gpu-setup.sh)" ;;
     amd)    echo "Detected AMD GPU -> dispatch target: bin/amd-rocm.sh (via gpu-setup.sh)" ;;
     none)   echo "No GPU detected -> gpu-setup.sh will no-op" ;;
 esac
-run env OMOCACHY_SKIP_USER_CONFIGS="$($SKIP_USER_CONFIGS && echo 1 || echo 0)" bash "$SCRIPT_DIR/gpu-setup.sh"
+run env OMACACHY_SKIP_USER_CONFIGS="$($SKIP_USER_CONFIGS && echo 1 || echo 0)" bash "$SCRIPT_DIR/gpu-setup.sh"
 
 # ---------------------------------------------------------------------------
 # Remaining post-apply reconciliation

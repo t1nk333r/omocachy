@@ -91,15 +91,15 @@ if command -v "$SHELLCHECK_BIN" &>/dev/null; then
     else
         bad "shellcheck --severity=warning -x" "$(cat "$WORK/sc")"
     fi
-elif [[ -n ${OMOCACHY_SKIP_SHELLCHECK:-} ]]; then
-    echo "skip shellcheck (OMOCACHY_SKIP_SHELLCHECK set)"
+elif [[ -n ${OMACACHY_SKIP_SHELLCHECK:-} ]]; then
+    echo "skip shellcheck (OMACACHY_SKIP_SHELLCHECK set)"
 else
-    bad "lint: shellcheck not installed — install it, set SHELLCHECK_BIN, or set OMOCACHY_SKIP_SHELLCHECK=1 to skip deliberately"
+    bad "lint: shellcheck not installed — install it, set SHELLCHECK_BIN, or set OMACACHY_SKIP_SHELLCHECK=1 to skip deliberately"
 fi
 ```
 
 `SHELLCHECK_BIN` makes the failure path testable without touching `PATH`;
-`OMOCACHY_SKIP_SHELLCHECK` is the explicit, visible escape hatch for
+`OMACACHY_SKIP_SHELLCHECK` is the explicit, visible escape hatch for
 contributors on machines without shellcheck.
 
 **Verify**: `bash -n tests/run.sh` → exit 0.
@@ -110,7 +110,7 @@ contributors on machines without shellcheck.
 - `tests/run.sh lint` → ends `0 failed`; the ok line reads
   `shellcheck --severity=warning -x`;
 - `SHELLCHECK_BIN=/bin/false tests/run.sh lint` → ends with `1 failed`;
-- `OMOCACHY_SKIP_SHELLCHECK=1 SHELLCHECK_BIN=/bin/false tests/run.sh lint` →
+- `OMACACHY_SKIP_SHELLCHECK=1 SHELLCHECK_BIN=/bin/false tests/run.sh lint` →
   prints the skip line and ends `0 failed`.
 
 ### Step 3: Make the handoff agree
@@ -136,7 +136,7 @@ plan apart from any cases other plans added).
 ## Done criteria
 
 - [ ] A missing/broken shellcheck yields a FAIL, not a silent skip, unless
-      `OMOCACHY_SKIP_SHELLCHECK` is set
+      `OMACACHY_SKIP_SHELLCHECK` is set
 - [ ] The local invocation matches the documented gate (`--severity=warning -x`)
 - [ ] All three Step 2 runs behave as stated
 - [ ] `tests/run.sh` `0 failed`; lint gate exit 0

@@ -105,7 +105,7 @@ if grep -rqs 'nvidia[-_]drm.*modeset' /etc/modprobe.d/ 2>/dev/null; then
     info "nvidia_drm modeset is already configured in /etc/modprobe.d; leaving it alone."
 else
     write_root_file /etc/modprobe.d/nvidia-modeset.conf <<'EOF'
-# Written by omocachy bin/nvidia.sh: DRM kernel mode setting for Wayland.
+# Written by omacachy bin/nvidia.sh: DRM kernel mode setting for Wayland.
 options nvidia_drm modeset=1 fbdev=1
 EOF
     info "Wrote /etc/modprobe.d/nvidia-modeset.conf (rebuild the initramfs to apply)."
@@ -114,7 +114,7 @@ fi
 # Session environment for the NVIDIA driver: the file it lands in, the
 # skip-user-configs behaviour and the dry-run handling live in
 # write_gpu_session_env (bin/lib/common.sh).
-GPU_ENV_CONTENT='# Written by omocachy bin/nvidia.sh (NVIDIA)
+GPU_ENV_CONTENT='# Written by omacachy bin/nvidia.sh (NVIDIA)
 export LIBVA_DRIVER_NAME=nvidia
 export GBM_BACKEND=nvidia-drm
 export __GLX_VENDOR_LIBRARY_NAME=nvidia

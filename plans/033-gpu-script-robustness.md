@@ -97,7 +97,7 @@ in the repo validates its arguments and skips gracefully.
 plan 029 for where).
 
 **Out of scope**: the driver logic itself (plans 007/008 territory), the
-wrapper's dispatch call site, `OMOCACHY_SKIP_USER_CONFIGS` handling.
+wrapper's dispatch call site, `OMACACHY_SKIP_USER_CONFIGS` handling.
 
 ## Git workflow
 
@@ -162,15 +162,15 @@ exit 1).
       ;;
   ```
 - Optional, and recommended for testability: read the detector through a seam,
-  `GPU_TYPE="${OMOCACHY_GPU_TYPE:-$(bash "$SCRIPT_DIR/gpu-detect.sh")}"`, and
+  `GPU_TYPE="${OMACACHY_GPU_TYPE:-$(bash "$SCRIPT_DIR/gpu-detect.sh")}"`, and
   document it in the header as a test/diagnostic override (the repo's other
-  seams use the `OMOCACHY_` prefix). If plan 029 has landed, its `gpu` section
+  seams use the `OMACACHY_` prefix). If plan 029 has landed, its `gpu` section
   can then exercise the `nvidia`/`amd` dispatch without hardware; mention it in
   your report either way.
 
 **Verify**: `PATH="$shim:$PATH" bash bin/gpu-setup.sh --dry-run` → `No GPU
 detected`, exit 0; `bash bin/gpu-setup.sh --bogus` → usage, exit 1;
-`OMOCACHY_GPU_TYPE=bogus bash bin/gpu-setup.sh` → the new error, exit 1 (only
+`OMACACHY_GPU_TYPE=bogus bash bin/gpu-setup.sh` → the new error, exit 1 (only
 if you added the seam).
 
 ### Step 4: Guard `gpu-detect.sh`'s pipeline
@@ -188,7 +188,7 @@ Add to `tests/run.sh` (in plan 029's `gpu` section if present):
 1. no-AMD skip (Step 2's shim command) → exit 0 and the skip text;
 2. `--bogus` on both vendor scripts → exit 1 and usage text;
 3. `gpu-setup.sh --dry-run` under the empty shim → `No GPU detected`, exit 0;
-4. (if the seam exists) `OMOCACHY_GPU_TYPE=bogus gpu-setup.sh` → exit 1.
+4. (if the seam exists) `OMACACHY_GPU_TYPE=bogus gpu-setup.sh` → exit 1.
 
 **Verify**: `tests/run.sh` → `0 failed`.
 
@@ -220,5 +220,5 @@ Add to `tests/run.sh` (in plan 029's `gpu` section if present):
 
 - If a new vendor script is added, the argument loop is the convention to copy.
 - Reviewer: confirm the strict parsing cannot break the wrapper's own call
-  (`run env OMOCACHY_SKIP_USER_CONFIGS=… bash gpu-setup.sh` passes no
+  (`run env OMACACHY_SKIP_USER_CONFIGS=… bash gpu-setup.sh` passes no
   arguments).

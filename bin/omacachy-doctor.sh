@@ -1,7 +1,7 @@
 #!/bin/bash
 set -uo pipefail
 
-# omocachy-doctor.sh — check that an Omarchy-4-on-CachyOS machine is in the
+# omacachy-doctor.sh — check that an Omarchy-4-on-CachyOS machine is in the
 # shape this project puts it in, and that a migrated profile is actually
 # complete. Read-only: it inspects, it never fixes.
 #
@@ -66,7 +66,7 @@ skip() { printf 'SKIP  %s\n' "$*"; }
 
 BUNDLE=""
 if [[ -n $BUNDLE_ARG ]]; then
-    WORK="$(mktemp -d -t omocachy-doctor-XXXXXX)"
+    WORK="$(mktemp -d -t omacachy-doctor-XXXXXX)"
     trap 'rm -rf "$WORK"' EXIT
     BUNDLE="$(profile_resolve_bundle "$BUNDLE_ARG" "$WORK/bundle")" || exit 1
 fi
@@ -75,7 +75,7 @@ OMARCHY_CONFIG="$HOME/.config/omarchy"
 PLUGIN_DIR="$OMARCHY_CONFIG/plugins"
 SHELL_JSON="$OMARCHY_CONFIG/shell.json"
 
-echo "=== omocachy-doctor.sh ==="
+echo "=== omacachy-doctor.sh ==="
 echo "host: $(uname -n)  user: $USER"
 echo ""
 
@@ -218,15 +218,15 @@ else
 fi
 
 if [[ $SHELL == */fish ]] || command -v fish &>/dev/null; then
-    if [[ -f $HOME/.config/fish/conf.d/omocachy.fish ]]; then
-        pass "fish integration present (~/.config/fish/conf.d/omocachy.fish: mise + zoxide)"
+    if [[ -f $HOME/.config/fish/conf.d/omacachy.fish ]]; then
+        pass "fish integration present (~/.config/fish/conf.d/omacachy.fish: mise + zoxide)"
     else
-        soft "no ~/.config/fish/conf.d/omocachy.fish; mise/zoxide are not activated for fish (bin/install-omarchy-quattro.sh writes it)"
+        soft "no ~/.config/fish/conf.d/omacachy.fish; mise/zoxide are not activated for fish (bin/install-omarchy-quattro.sh writes it)"
     fi
 fi
 
 GPU="$(bash "$SCRIPT_DIR/gpu-detect.sh" 2>/dev/null || echo unknown)"
-GPU_ENV="$HOME/.config/uwsm/env.d/50-omocachy-gpu"
+GPU_ENV="$HOME/.config/uwsm/env.d/50-omacachy-gpu"
 if [[ $GPU == none || $GPU == unknown ]]; then
     skip "no discrete GPU detected — session env check"
 elif [[ ! -f $GPU_ENV ]]; then
@@ -294,7 +294,7 @@ if [[ -n $BUNDLE ]]; then
         if ((absent == 0)); then
             pass "every non-policy-denied explicit package from the bundle is installed ($denied denied by policy)"
         else
-            soft "$absent explicit package(s) from the bundle are not installed here ($denied more denied by policy) — 'omocachy-profile-import.sh --only packages'"
+            soft "$absent explicit package(s) from the bundle are not installed here ($denied more denied by policy) — 'omacachy-profile-import.sh --only packages'"
         fi
 
         missing_units=0

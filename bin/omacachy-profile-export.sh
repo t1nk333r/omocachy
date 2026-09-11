@@ -1,14 +1,14 @@
 #!/bin/bash
 set -euo pipefail
 
-# omocachy-profile-export.sh — capture this machine's Omarchy desktop profile
+# omacachy-profile-export.sh — capture this machine's Omarchy desktop profile
 # into a portable bundle: the Quickshell layer (~/.config/omarchy: shell.json,
 # plugins, themes, extensions, hooks), Hyprland and shell/tooling config, the
 # explicit package list, mise tools and the enabled user units.
 #
 # Read-only with respect to the running system: it only writes inside the
 # output directory. Run it on the machine you are leaving, then
-# bin/omocachy-profile-import.sh on the CachyOS machine you are moving to
+# bin/omacachy-profile-import.sh on the CachyOS machine you are moving to
 # (after bin/install-omarchy-quattro.sh has put Omarchy 4 there).
 #
 # Design and evidence: plans/018-omarchy-profile-migration.md.
@@ -87,15 +87,15 @@ require_cmds tar jq find du
 [[ -r $PATHS_FILE ]] || die "capture list not readable: $PATHS_FILE"
 
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
-BUNDLE_ID="omocachy-profile-$(uname -n)-$TIMESTAMP"
+BUNDLE_ID="omacachy-profile-$(uname -n)-$TIMESTAMP"
 BUNDLE="$OUT_ROOT/$BUNDLE_ID"
-WORK="$(mktemp -d -t omocachy-export-XXXXXX)"
+WORK="$(mktemp -d -t omacachy-export-XXXXXX)"
 trap 'rm -rf "$WORK"' EXIT
 
 OMARCHY_CONFIG="$HOME/.config/omarchy"
 PLUGIN_DIR="$OMARCHY_CONFIG/plugins"
 
-echo "=== omocachy-profile-export.sh ==="
+echo "=== omacachy-profile-export.sh ==="
 $DRY_RUN && echo "(dry-run: nothing will be written)"
 echo ""
 
@@ -401,7 +401,7 @@ else
     {
         echo "# $BUNDLE_ID"
         echo ""
-        echo "Omarchy desktop profile captured by omocachy-profile-export.sh."
+        echo "Omarchy desktop profile captured by omacachy-profile-export.sh."
         echo ""
         echo "| Fact | Value |"
         echo "|---|---|"
@@ -422,8 +422,8 @@ else
         echo ""
         echo '```bash'
         echo "# on the CachyOS machine, after bin/install-omarchy-quattro.sh:"
-        echo "bin/omocachy-profile-import.sh --bundle <this-bundle> --dry-run"
-        echo "bin/omocachy-profile-import.sh --bundle <this-bundle>"
+        echo "bin/omacachy-profile-import.sh --bundle <this-bundle> --dry-run"
+        echo "bin/omacachy-profile-import.sh --bundle <this-bundle>"
         echo '```'
         echo ""
         echo "## Handle as sensitive"
@@ -477,7 +477,7 @@ echo "Next: on the CachyOS target, install Omarchy 4 with bin/install-omarchy-qu
 if [[ -n ${ARCHIVE_PATH:-} ]]; then
     echo "then copy $(basename "$ARCHIVE_PATH") AND $(basename "$ARCHIVE_PATH").sha256 there"
     echo "(the importer verifies the digest before unpacking), and restore it with"
-    echo "  bin/omocachy-profile-import.sh --bundle <archive>"
+    echo "  bin/omacachy-profile-import.sh --bundle <archive>"
 else
-    echo "then restore this bundle with bin/omocachy-profile-import.sh --bundle $BUNDLE_ID"
+    echo "then restore this bundle with bin/omacachy-profile-import.sh --bundle $BUNDLE_ID"
 fi

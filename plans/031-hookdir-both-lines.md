@@ -34,15 +34,15 @@ branch inserts only the wrapper's own line.
 ## Current state
 
 - `bin/install-omarchy-quattro.sh:938-975` — `ensure_hookdir_lines`:
-  - branch 1 (`:941-945`): `if grep -qxF "HookDir = $OMOCACHY_HOOK_DIR/" "$conf"; then echo "…already registered…"; return 0; fi`
+  - branch 1 (`:941-945`): `if grep -qxF "HookDir = $OMACACHY_HOOK_DIR/" "$conf"; then echo "…already registered…"; return 0; fi`
   - branch 2 (`:946-962`): `elif grep -qE '^\s*HookDir\s*=' "$conf"` → awk-inserts **only**
-    `HookDir = $OMOCACHY_HOOK_DIR/` after the last existing HookDir line.
+    `HookDir = $OMACACHY_HOOK_DIR/` after the last existing HookDir line.
   - branch 3 (`:963-967`): no HookDir at all →
-    `run_root sed -i "/^\[options\]/a HookDir = $PACMAN_HOOK_DIR/\nHookDir = $OMOCACHY_HOOK_DIR/" /etc/pacman.conf`
+    `run_root sed -i "/^\[options\]/a HookDir = $PACMAN_HOOK_DIR/\nHookDir = $OMACACHY_HOOK_DIR/" /etc/pacman.conf`
     (both lines, "in this order").
   - post-write guard (`:969-972`) verifies only the wrapper's own line.
 - The constants used: `$PACMAN_HOOK_DIR` (`/etc/pacman.d/hooks/`) and
-  `$OMOCACHY_HOOK_DIR` (`/etc/pacman.d/hooks-omocachy/`, `:500`).
+  `$OMACACHY_HOOK_DIR` (`/etc/pacman.d/hooks-omacachy/`, `:500`).
 - `check_hookdir_override` (`:692-694`) returns 0 for non-Limine… check the
   live code: it currently returns 0 for Limine machines and otherwise verifies
   the override somewhere — read it before editing and keep its shape.
@@ -81,14 +81,14 @@ ensure_hookdir_lines() {
     conf="$(host_path /etc/pacman.conf)"
     local have_stock=false have_ours=false
     grep -qxF "HookDir = $PACMAN_HOOK_DIR/" "$conf" 2>/dev/null && have_stock=true
-    grep -qxF "HookDir = $OMOCACHY_HOOK_DIR/" "$conf" 2>/dev/null && have_ours=true
+    grep -qxF "HookDir = $OMACACHY_HOOK_DIR/" "$conf" 2>/dev/null && have_ours=true
     if $have_stock && $have_ours; then
         echo "HookDir lines already registered in /etc/pacman.conf."
         return 0
     fi
     local -a missing=()
     $have_stock || missing+=("HookDir = $PACMAN_HOOK_DIR/")
-    $have_ours  || missing+=("HookDir = $OMOCACHY_HOOK_DIR/")
+    $have_ours  || missing+=("HookDir = $OMACACHY_HOOK_DIR/")
     printf 'Adding to /etc/pacman.conf: %s\n' "${missing[*]}"
     ...insert `missing` after the last existing HookDir line, or after [options] when none exists...
 }
@@ -124,7 +124,7 @@ constant is used in `ensure_hookdir_lines` and in `check_hookdir_override`.
 ```bash
 cp -a tests/fixtures/cachyos-grub-plain tests/fixtures/cachyos-hookdir-preset
 printf 'HookDir = /usr/local/lib/hooks/\n' >>tests/fixtures/cachyos-hookdir-preset/etc/pacman.conf
-printf 'HookDir = /etc/pacman.d/hooks/\nHookDir = /etc/pacman.d/hooks-omocachy/\n' >>tests/fixtures/cachyos-hookdir-preset/expected.stderr
+printf 'HookDir = /etc/pacman.d/hooks/\nHookDir = /etc/pacman.d/hooks-omacachy/\n' >>tests/fixtures/cachyos-hookdir-preset/expected.stderr
 ```
 
 (The `expected.stderr` needles are contains-only assertions against the
@@ -141,11 +141,11 @@ checks; the fixture's output mentions both HookDir lines.
 ## Test plan
 
 - The new fixture is the regression: against the current code, branch 2 prints
-  only the omocachy line, so the stock-line needle fails; after Step 1 both
+  only the omacachy line, so the stock-line needle fails; after Step 1 both
   needles pass.
 - The branch-1 case (own line present, stock line absent) is not covered by a
   fixture — add a second fixture only if it is cheap (copy the new one and
-  pre-add the omocachy line to its pacman.conf); otherwise note the gap in
+  pre-add the omacachy line to its pacman.conf); otherwise note the gap in
   your report.
 
 ## Done criteria

@@ -26,7 +26,7 @@ run by any test — the profile export/import/doctor trio (the newest and most
 dangerous work line), the debloat picker, and the GPU scripts. The suite also
 cannot exercise the wrapper's own assertion suite (it short-circuits under
 `--dry-run`, and the checks read live paths), and the GPU probe bypasses the
-`OMOCACHY_SYSROOT` seam. This plan adds the harness sections and the cheap
+`OMACACHY_SYSROOT` seam. This plan adds the harness sections and the cheap
 coverage the code already enables, and routes the GPU probe through the seam.
 
 ## Current state
@@ -35,7 +35,7 @@ coverage the code already enables, and routes the GPU probe through the seam.
   (`case "${1:-all}" in` at `:250`), helpers `ok`/`bad`/`head_`/`expect_eq`/
   `expect_contains` at `:26-37`, `$WORK` from `mktemp -d` + EXIT trap at
   `:21-22`. Fixtures are driven by `dry_run_fixture()` (`:143-152`) which sets
-  `OMOCACHY_SYSROOT`, `OMOCACHY_DECISIONS_FILE`, `OMOCACHY_LOG`.
+  `OMACACHY_SYSROOT`, `OMACACHY_DECISIONS_FILE`, `OMACACHY_LOG`.
 - `bin/lib/profile.sh` exposes pure, fixture-friendly helpers:
   `profile_read_paths` (`:133-152`, refuses `PROFILE_SECRET_DIRS`), 
   `profile_pkg_denied` (`:118-131`), `profile_shelljson_plugin_ids`
@@ -49,7 +49,7 @@ coverage the code already enables, and routes the GPU probe through the seam.
   ```bash
   GPU_TYPE="$(bash "$SCRIPT_DIR/gpu-detect.sh")"
   ```
-  runs unconditionally, also under `OMOCACHY_SYSROOT`; the seam contract
+  runs unconditionally, also under `OMACACHY_SYSROOT`; the seam contract
   (`:56-60`) says every read of host state goes through `host_path`.
 - `bin/gpu-setup.sh:11-24` dispatches on `$GPU_TYPE` with branches
   `nvidia|amd|none` and no `default`.
@@ -182,7 +182,7 @@ instead of building cross-section coupling.
 
 - [ ] `tests/run.sh units`, `picker`, `gpu` each run and pass
 - [ ] `tests/run.sh` runs them from `all`; `0 failed`
-- [ ] The GPU probe is skipped under `OMOCACHY_SYSROOT`
+- [ ] The GPU probe is skipped under `OMACACHY_SYSROOT`
 - [ ] Lint gate exit 0
 - [ ] No files outside `tests/run.sh` and the wrapper probe guard are modified
 - [ ] `plans/README.md` status row updated

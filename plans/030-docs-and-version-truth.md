@@ -48,7 +48,7 @@ repo. A zero-context executor reading these gets a false model of the project.
   (`cachyos-grub-plain`, `cachyos-limine-luks`, `cachyos-sdboot-luks`,
   `irreconcilable-hooks`, `omarchy-host-control`).
 - `--restore-host-specific`: documented as working at `README.md:560-561`,
-  implemented at `bin/omocachy-profile-import.sh:69`+`:207`, "code-reviewed but
+  implemented at `bin/omacachy-profile-import.sh:69`+`:207`, "code-reviewed but
   not executed" at `plans/018-omarchy-profile-migration.md:281`, backlog at
   `handoff.md:147-148`.
 - `plans/README.md:9` — "Repo context for executors: ~300 lines of Bash (no
@@ -168,7 +168,7 @@ tracked as the next validation item, not a defect.
 **Verify**: `tests/run.sh` → `0 failed`; lint gate → exit 0;
 `bin/install-omarchy-quattro.sh --dry-run --yes | sed -n '/[Rr]econciled/p'` on
 the dev host prints the drift warning; the same command with
-`OMOCACHY_SYSROOT=tests/fixtures/cachyos-limine-luks` prints none (fixture is
+`OMACACHY_SYSROOT=tests/fixtures/cachyos-limine-luks` prints none (fixture is
 4.0.2).
 
 ## Test plan

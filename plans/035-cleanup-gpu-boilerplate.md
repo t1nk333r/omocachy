@@ -27,9 +27,9 @@ duplicated loop is why a misplaced `--dry-run` used to install for real.
     is refused with usage on stderr. Adopted by `bin/nvidia.sh` and
     `bin/amd-rocm.sh` (15-line loops → one call each) and by
     `bin/gpu-setup.sh`, which now also sources the library — it never did.
-  - `write_gpu_session_env LABEL CONTENT`, plus the `OMOCACHY_GPU_ENV_FILE`
+  - `write_gpu_session_env LABEL CONTENT`, plus the `OMACACHY_GPU_ENV_FILE`
     constant — the shared uwsm `env.d` write, including the
-    `OMOCACHY_SKIP_USER_CONFIGS=1` print-only path. Adopted by both vendor
+    `OMACACHY_SKIP_USER_CONFIGS=1` print-only path. Adopted by both vendor
     scripts, which keep only their vendor content string.
 - Net: −54 lines of duplicated boilerplate.
 
@@ -38,7 +38,7 @@ duplicated loop is why a misplaced `--dry-run` used to install for real.
 - Byte-for-byte output equivalence of the pre/post scripts for:
   `nvidia.sh --dry-run` and `amd-rocm.sh --dry-run` (real AMD host, plus an
   `lspci` shim faking an NVIDIA card), each with and without
-  `OMOCACHY_SKIP_USER_CONFIGS=1`; `gpu-setup.sh --dry-run` with and without
+  `OMACACHY_SKIP_USER_CONFIGS=1`; `gpu-setup.sh --dry-run` with and without
   the skip flag; `gpu-setup.sh --bogus` (refusal text). All seven diffs
   identical.
 - `--help` / `--bogus` behaviour re-checked on all three scripts.

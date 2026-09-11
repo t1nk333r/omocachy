@@ -1,7 +1,8 @@
-Disabled by omocachy (non-limine bootloader)
+Disabled by omacachy (non-limine bootloader)
+Removing the pre-rename HookDir = /etc/pacman.d/hooks-omocachy/ from /etc/pacman.conf.
 Exec = /usr/bin/env PATH=/usr/bin
-HookDir = /etc/pacman.d/hooks-omocachy/
+HookDir = /etc/pacman.d/hooks-omacachy/
 No sshd is enabled here, so nothing was opened.
 Removing stale /etc/sddm.conf
-cp -f /usr/share/libalpm/hooks/90-mkinitcpio-install.hook /etc/pacman.d/hooks-omocachy/90-mkinitcpio-install.hook
+cp -f /usr/share/libalpm/hooks/90-mkinitcpio-install.hook /etc/pacman.d/hooks-omacachy/90-mkinitcpio-install.hook
 HookDir = /etc/pacman.d/hooks/

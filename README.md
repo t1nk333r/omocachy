@@ -1,4 +1,4 @@
-# omocachy
+# omacachy
 
 Install [DHH's Omarchy](https://omarchy.org) — an opinionated, Hyprland-based
 desktop — on top of [CachyOS](https://cachyos.org), a performance-optimized
@@ -10,9 +10,9 @@ an Omarchy machine you are moving away from, and an optional debloater:
 | Path | Script | Status |
 |------|--------|--------|
 | **Omarchy 4 "Quattro"** (packages) | `bin/install-omarchy-quattro.sh` | **Recommended** |
-| Capture an existing Omarchy desktop profile | `bin/omocachy-profile-export.sh` | Run on the machine you are leaving |
-| Restore it onto the CachyOS machine | `bin/omocachy-profile-import.sh` | Run after the installer |
-| Check the result (also standalone) | `bin/omocachy-doctor.sh` | Read-only |
+| Capture an existing Omarchy desktop profile | `bin/omacachy-profile-export.sh` | Run on the machine you are leaving |
+| Restore it onto the CachyOS machine | `bin/omacachy-profile-import.sh` | Run after the installer |
+| Check the result (also standalone) | `bin/omacachy-doctor.sh` | Read-only |
 | Optional debloater: per-item picker (Omarchy 4) | `bin/debloat-quattro.sh` | Opt-in, v4 only |
 
 This README assumes an experienced Arch user — comfortable with the shell and
@@ -77,7 +77,7 @@ state.
 
 ```bash
 git clone https://github.com/d7eeem/omocachy.git
-cd omocachy
+cd omacachy
 bin/install-omarchy-quattro.sh --dry-run   # review the exact plan first
 bin/install-omarchy-quattro.sh             # then run it for real
 ```
@@ -101,7 +101,7 @@ the confirmation prompt (safe to combine with `--dry-run`).
 
   and it also suppresses the fish `conf.d` file, while the GPU scripts print
   their session-environment lines instead of writing
-  `~/.config/uwsm/env.d/50-omocachy-gpu`. Use it when a dotfiles tool owns
+  `~/.config/uwsm/env.d/50-omacachy-gpu`. Use it when a dotfiles tool owns
   your home; deploy your dotfiles afterwards and run `omarchy-provision-user`
   yourself if you want Omarchy's user finalization. Nothing else implies this
   flag: without it, all three steps run, and the replay is preceded by a
@@ -219,12 +219,12 @@ ESP — registers a third pacman hook directory:
 
 ```
 HookDir = /etc/pacman.d/hooks/
-HookDir = /etc/pacman.d/hooks-omocachy/
+HookDir = /etc/pacman.d/hooks-omacachy/
 ```
 
 `pacman.conf(5)`: hooks in later directories take precedence over hooks in
 earlier ones, and naming any `HookDir` replaces the `/etc/pacman.d/hooks`
-default, so both lines are written. `/etc/pacman.d/hooks-omocachy/` then
+default, so both lines are written. `/etc/pacman.d/hooks-omacachy/` then
 holds a copy of **mkinitcpio's own** `90-mkinitcpio-install.hook` (so kernel
 and driver upgrades keep regenerating the initramfs — the Limine variant that
 `limine-mkinitcpio-hook` installs into `/etc/pacman.d/hooks/` is shadowed,
@@ -244,13 +244,13 @@ was observed, deleted, and observed coming back on a GRUB CachyOS guest.
 No packaged file is edited anywhere in this path: `pacman -Qkk
 limine-mkinitcpio-hook` stays clean, and there is nothing for a package
 upgrade to silently revert. **Restore path:** delete
-`/etc/pacman.d/hooks-omocachy/` and the two `HookDir` lines. There is no
+`/etc/pacman.d/hooks-omacachy/` and the two `HookDir` lines. There is no
 `/usr/bin/true` no-op over the initramfs hook and no `NoUpgrade` entry —
 both were removed as unsafe (see `plans/016-*.md`).
 
 This is no longer inferred from `pacman.conf(5)`. On a GRUB CachyOS guest,
 `pacman -S --debug linux-cachyos` prints both `HookDir` lines, then
-`parsing hook file /etc/pacman.d/hooks-omocachy/90-mkinitcpio-install.hook`
+`parsing hook file /etc/pacman.d/hooks-omacachy/90-mkinitcpio-install.hook`
 followed by `skipping overridden hook` for the `/etc/pacman.d/hooks/` and
 `/usr/share/libalpm/hooks/` copies and for all three `*limine*` hooks — with
 the initramfs still rebuilding, `limine-install` never running, and
@@ -372,10 +372,10 @@ for its own re-runs. After your first `omarchy update`, run
 would take the CachyOS repos, `os-release` or the boot hooks back out.
 
 **Every run is logged.** A real install writes
-`~/.local/state/omocachy/install-<timestamp>.log`. `--dry-run`,
+`~/.local/state/omacachy/install-<timestamp>.log`. `--dry-run`,
 `--verify-only` and `--skip-user-configs` promise to leave `$HOME` alone, so
-they log to `/tmp/omocachy-install-<timestamp>.log` instead. Either path is
-overridable with `OMOCACHY_LOG`. On an unexpected abort the ERR trap names the
+they log to `/tmp/omacachy-install-<timestamp>.log` instead. Either path is
+overridable with `OMACACHY_LOG`. On an unexpected abort the ERR trap names the
 step and scans that log for the failure patterns worth reading.
 
 **Testing without CachyOS.** `tests/run.sh` runs the whole suite on any
@@ -387,7 +387,7 @@ CachyOS+GRUB, CachyOS+systemd-boot-with-the-limine-package-installed, a
 case, and this project's own Omarchy host as a control), and a dry-run purity
 check that puts failing stubs for `sudo`/`pacman`/`cp`/`mv`/`systemctl` first
 on `PATH` and proves none of them is executed. Fixtures work through
-`OMOCACHY_SYSROOT=<dir>`, which redirects every *read* of host state and
+`OMACACHY_SYSROOT=<dir>`, which redirects every *read* of host state and
 requires `--dry-run`.
 
 **Status: run on real CachyOS twice, with caveats.** Two throwaway CachyOS
@@ -446,7 +446,7 @@ actually conflict, resolved as follows:
    will conflict with Tealdeer; pick one when that happens.
 3. **Mise and zoxide on Fish**: Omarchy wires mise activation only for Bash
    and installs zoxide without initializing it for Fish. The installer
-   writes `~/.config/fish/conf.d/omocachy.fish` activating both — a file
+   writes `~/.config/fish/conf.d/omacachy.fish` activating both — a file
    that survives upstream changes to Omarchy's own activation scripts
    (skipped with `--skip-user-configs`).
 4. **Login system (SDDM)**: CachyOS's Hyprland option provides the SDDM
@@ -484,7 +484,7 @@ The installer uses the same vendor dispatch (`bin/gpu-detect.sh` →
   and the distribution's own tooling is left to it. VA-API only — Mesa
   removed VDPAU support upstream.
 - **Session environment**: both vendor scripts write their variables to
-  `~/.config/uwsm/env.d/50-omocachy-gpu` (uwsm sources `uwsm/env.d/*`), never
+  `~/.config/uwsm/env.d/50-omacachy-gpu` (uwsm sources `uwsm/env.d/*`), never
   to your own `~/.config/uwsm/env`. With `--skip-user-configs` they print
   the lines for you to place instead.
 - **Hybrid NVIDIA+AMD**: the NVIDIA path wins (see the detection order in
@@ -536,16 +536,16 @@ units you enabled. Three scripts carry that across:
 
 ```bash
 # 1. on the machine you are leaving (read-only; writes only into --out)
-bin/omocachy-profile-export.sh --out /run/media/usb --archive
+bin/omacachy-profile-export.sh --out /run/media/usb --archive
 
 # 2. on the CachyOS machine, AFTER bin/install-omarchy-quattro.sh
 #    Copy BOTH the archive and its .sha256 there: the importer verifies the
 #    digest before it unpacks anything.
-bin/omocachy-profile-import.sh --bundle /run/media/usb/omocachy-profile-<host>-<ts>.tar.zst --dry-run
-bin/omocachy-profile-import.sh --bundle /run/media/usb/omocachy-profile-<host>-<ts>.tar.zst
+bin/omacachy-profile-import.sh --bundle /run/media/usb/omacachy-profile-<host>-<ts>.tar.zst --dry-run
+bin/omacachy-profile-import.sh --bundle /run/media/usb/omacachy-profile-<host>-<ts>.tar.zst
 
 # 3. any time, on either machine
-bin/omocachy-doctor.sh --bundle /run/media/usb/omocachy-profile-<host>-<ts>.tar.zst
+bin/omacachy-doctor.sh --bundle /run/media/usb/omacachy-profile-<host>-<ts>.tar.zst
 ```
 
 ### What a bundle contains
@@ -584,11 +584,11 @@ Stages, selectable with `--only`/`--skip`: `configs`, `packages`, `mise`,
 - **Nothing is deleted.** The payload is *merged* into `$HOME`: files the
   bundle does not carry are left alone.
 - **Everything it would shadow is backed up first**, to
-  `~/.local/state/omocachy/backups/import-<ts>/`, together with a generated
+  `~/.local/state/omacachy/backups/import-<ts>/`, together with a generated
   `rollback.sh` (which itself supports `--dry-run`) that restores exactly the
   paths that existed and removes exactly the ones the import introduced.
 - **Host-specific files are not restored on top of working ones.**
-  `~/.config/hypr/monitors.lua` and `~/.config/uwsm/env.d/50-omocachy-gpu`
+  `~/.config/hypr/monitors.lua` and `~/.config/uwsm/env.d/50-omacachy-gpu`
   describe the *old* machine — a foreign monitor layout can leave you without
   a usable display. They are parked as `<name>.from-<source-host>` for you to
   merge by hand; `--restore-host-specific` overrides that. That flag is
@@ -617,7 +617,7 @@ Stages, selectable with `--only`/`--skip`: `configs`, `packages`, `mise`,
   non-zero instead of reporting success.
 - **Offline is handled.** With no network the `packages` and `mise` stages
   skip and leave their lists in
-  `~/.local/state/omocachy/reports/import-<ts>/`; re-run later with
+  `~/.local/state/omacachy/reports/import-<ts>/`; re-run later with
   `--only packages,mise`.
 - **User units are re-enabled** when the target actually has the unit; units
   whose packages are missing are listed instead of failing.
@@ -627,7 +627,7 @@ the restored Quickshell layer.
 
 ### The doctor
 
-`bin/omocachy-doctor.sh` is read-only and exits non-zero on failure, so it
+`bin/omacachy-doctor.sh` is read-only and exits non-zero on failure, so it
 works as a post-migration gate. It checks the system layer (`ID=cachyos`
 survived, `[omarchy]` and `[cachyos*]` repos, `omarchy`/`omarchy-settings`,
 a `quickshell` provider, no stale `/etc/sddm.conf`, the mkinitcpio HOOKS

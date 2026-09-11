@@ -65,7 +65,7 @@ guard: a branch the code cannot reach.
 - On this host (no `chwd`): `bin/amd-rocm.sh --dry-run` now prints the warning
   and continues through the package and session-env steps instead of planning
   `sudo chwd`.
-- The real run (packages + `~/.config/uwsm/env.d/50-omocachy-gpu`) is the
+- The real run (packages + `~/.config/uwsm/env.d/50-omacachy-gpu`) is the
   remaining half of release gate 3 and needs the operator's sudo; the handoff
   wording is updated once it has run.
 

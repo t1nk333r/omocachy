@@ -18,7 +18,7 @@
   suite
 - **Depends on**: plan 012 (the wrapper), plan 015 (what this audits)
 - **Category**: correctness, testing
-- **Planned at**: omocachy `643bb57` (Reconcile Quattro wrapper against
+- **Planned at**: omacachy `643bb57` (Reconcile Quattro wrapper against
   installed Omarchy 4.0.2), 2026-09-07; upstream stamp: omarchy **4.0.2-1**
 - **Status**: DONE (this session). **Never run for real on a CachyOS host.**
   The fixture matrix proves the wrapper's *decision logic* takes the intended
@@ -67,10 +67,10 @@ so both lines are written, in order:
 
 ```
 HookDir = /etc/pacman.d/hooks/
-HookDir = /etc/pacman.d/hooks-omocachy/
+HookDir = /etc/pacman.d/hooks-omacachy/
 ```
 
-`/etc/pacman.d/hooks-omocachy/` receives a copy of *mkinitcpio's* stock
+`/etc/pacman.d/hooks-omacachy/` receives a copy of *mkinitcpio's* stock
 `90-mkinitcpio-install.hook` (shadowing the Limine variant that will land in
 `/etc/pacman.d/hooks/`) and inert overrides for the three
 `/usr/share/libalpm/hooks/*limine*` hooks. This now runs **before** the pacman
@@ -214,15 +214,15 @@ mechanism's contract.
 
 ## Ported from the sibling project
 
-`jeanmartins7/omarchy-on-cachyos` (`~/Projects/omocachy/omarchy-on-cachyos`,
+`jeanmartins7/omarchy-on-cachyos` (`~/Projects/omacachy/omarchy-on-cachyos`,
 HEAD `3c88548`) is not viable for v4 — it rsyncs a git clone over
 `/usr/share/omarchy`, which is pacman-owned on 4.x. Three things from it were
 worth taking, and only those:
 
 - the `ERR`/`INT`/`TERM` traps, naming the step that failed
   (`bin/install-omarchy-v4-on-cachyos.sh:31-36`);
-- a persistent install log — here `~/.local/state/omocachy/install-<ts>.log`
-  (`OMOCACHY_LOG` overrides), not `/tmp`;
+- a persistent install log — here `~/.local/state/omacachy/install-<ts>.log`
+  (`OMACACHY_LOG` overrides), not `/tmp`;
 - `_diagnose_failure`'s log pattern scanner (`:293`), trimmed to the patterns
   that actually appear in a pacman/apply-system abort and pointed at the log.
 
@@ -232,7 +232,7 @@ Nothing here has run on CachyOS, and a real CachyOS guest needs network egress
 the owner has to authorise. So the CachyOS-only branches were made executable
 without CachyOS:
 
-- **`OMOCACHY_SYSROOT=<dir>`** redirects every *read* of host state —
+- **`OMACACHY_SYSROOT=<dir>`** redirects every *read* of host state —
   `/etc/os-release`, `/etc/cachyos-release`, `/etc/pacman.conf`,
   `/etc/pacman.d/*`, `/etc/mkinitcpio.conf` + `conf.d/*.conf`,
   `/etc/default/limine`, `/etc/skel`, `/etc/crypttab`, `/etc/sddm.conf`,
@@ -240,7 +240,7 @@ without CachyOS:
   `/usr/share/libalpm/hooks`. Writes are untouched; the variable requires
   `--dry-run` and refuses otherwise. Unset, `host_path` is the identity and
   behaviour is byte-for-byte what it was.
-- **`OMOCACHY_DECISIONS_FILE=<path>`** records `key=value` decisions so tests
+- **`OMACACHY_DECISIONS_FILE=<path>`** records `key=value` decisions so tests
   assert the branch taken, not log wording.
 - **`tests/fixtures/*`** are sysroots; **`tests/run.sh`** is the entry point
   (`lint`, `hooks`, `matrix`, `purity`, or all four). 105 assertions,
@@ -285,7 +285,7 @@ asserted.
   ESP-based bootloader detection; `--verify-only`; faillock backup + decision;
   `linux-lts` in `BOOT_ORDER`; corrected update-guard path; `PATH`-scoped
   `omarchy-refresh-limine` shim; log + ERR/INT/TERM traps + failure scanner;
-  `OMOCACHY_SYSROOT`/`OMOCACHY_DECISIONS_FILE` seams; extended assertions.
+  `OMACACHY_SYSROOT`/`OMACACHY_DECISIONS_FILE` seams; extended assertions.
 - `tests/run.sh`, `tests/fixtures/*` (new).
 - `README.md`: `--skip-user-configs` semantics by name, `--verify-only`, the
   bootloader/HookDir section, the update-guard section, the testing section,

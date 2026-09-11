@@ -1,7 +1,7 @@
 # 018 — Carry an existing Omarchy profile onto CachyOS (export / import / doctor)
 
-Written and executed 2026-09-07 against `643bb57`. Branch: `omocachy-profile`,
-merged into `omocachy`.
+Written and executed 2026-09-07 against `643bb57`. Branch: `omacachy-profile`,
+merged into `omacachy`.
 
 ## Problem
 
@@ -50,7 +50,7 @@ Rejected, with reasons:
 - **Bootstrapping `yay`** — CachyOS ships `paru`. The importer uses whichever
   of `paru`/`yay` exists and reports honestly when neither does.
 - **Appending NVIDIA env to `~/.config/uwsm/env`** — that file belongs to the
-  user (often dotfile-managed). Plan 015's `uwsm/env.d/50-omocachy-gpu` is a
+  user (often dotfile-managed). Plan 015's `uwsm/env.d/50-omacachy-gpu` is a
   file we own and can rewrite.
 - **Moving `~/.config/omarchy` into `~/.dotfiles` and symlinking it (Stow)** —
   a destructive re-layout of a live desktop for no gain here. The dev machine
@@ -72,13 +72,13 @@ Three scripts plus two libraries, sharing this repo's dry-run contract.
   policy, the package deny policy, plugin enumeration, `shell.json` plugin-id
   extraction, bundle resolution (directory or archive).
 - `share/profile-paths.conf` — the capture list, relative to `$HOME`, as data.
-- `bin/omocachy-profile-export.sh` — read-only with respect to the system;
+- `bin/omacachy-profile-export.sh` — read-only with respect to the system;
   writes a bundle (`home/` payload + `manifest.json` + `SUMMARY.md` +
   package/service/system metadata), optionally an archive.
-- `bin/omocachy-profile-import.sh` — stages `configs`, `packages`, `mise`,
+- `bin/omacachy-profile-import.sh` — stages `configs`, `packages`, `mise`,
   `services`, `verify`; backs up every path it would shadow and generates
   `rollback.sh`; merges rather than replaces; parks host-specific files.
-- `bin/omocachy-doctor.sh` — read-only checks of the system layer, the
+- `bin/omacachy-doctor.sh` — read-only checks of the system layer, the
   Quickshell layer, tooling, and (with `--bundle`) the machine against a
   bundle.
 
@@ -115,7 +115,7 @@ Three scripts plus two libraries, sharing this repo's dry-run contract.
    0600) instead of pretending it is safe to share.
 7. **Host-specific files must not be restored blind.**
    `~/.config/hypr/monitors.lua` from another machine is wrong and can leave
-   no usable display; `uwsm/env.d/50-omocachy-gpu` from an AMD source on an
+   no usable display; `uwsm/env.d/50-omacachy-gpu` from an AMD source on an
    NVIDIA target breaks acceleration. They are parked as
    `<name>.from-<source-host>` unless `--restore-host-specific`.
 8. **A rollback that `rm -rf`s before copying is observable.** The first
@@ -130,7 +130,7 @@ The importer never installs, by policy (regex → reason in
 stack, `omarchy*`/`quickshell*` (the wrapper's job), base-system packages,
 `cachyos-*` metapackages, and `tldr` (conflicts with CachyOS's tealdeer —
 §4.2 of the README). Every skip is printed with its reason and written to
-`~/.local/state/omocachy/reports/import-<ts>/`.
+`~/.local/state/omacachy/reports/import-<ts>/`.
 
 Verified by unit-probing `profile_pkg_denied` over 24 names (all of the above
 deny; `tealdeer`, `ghostty`, `mise-bin`, `herdr`, `firefox` allow) and by a
@@ -153,13 +153,13 @@ network) unless stated otherwise:
 4. Real export inside the guest: 138 MB payload, 105 MB `.tar.zst`; archive
    copied to the host and back with matching sha256.
 5. `./lab reset` to a pristine guest (0 plugins), then
-   `omocachy-doctor.sh --bundle`: correctly **failed** with 44 missing
+   `omacachy-doctor.sh --bundle`: correctly **failed** with 44 missing
    plugins / 25 missing local-only plugins.
-6. `omocachy-profile-import.sh --bundle <archive> --yes` on that pristine
+6. `omacachy-profile-import.sh --bundle <archive> --yes` on that pristine
    guest: configs OK, packages OK (nothing to install), mise SKIPPED
    (offline, list written), services OK, verify OK; 44 plugins restored,
    `monitors.lua` parked as `monitors.lua.from-omarchy-lab`.
-7. `omocachy-doctor.sh --bundle`: 0 failed, 0 warnings, including
+7. `omacachy-doctor.sh --bundle`: 0 failed, 0 warnings, including
    `hyprctl configerrors` clean and `omarchy-shell shell ping` answering.
 8. `./lab test`: all green (boot, session, `hyprctl reload`, 254 keybindings,
    `shell.json`, shell IPC, `lock isLocked`, tmux, herdr).
@@ -205,7 +205,7 @@ What the real run found, and what changed because of it:
    `~/.bashrc` (via `default/bash/env-bootstrap`), which the seeding step is
    what installs; a fresh CachyOS user over ssh — or any fish user — has
    nothing. The wrapper now sources `env-bootstrap` before seeding, and the
-   fish `conf.d/omocachy.fish` exports `OMARCHY_PATH` too.
+   fish `conf.d/omacachy.fish` exports `OMARCHY_PATH` too.
 3. A debugging artefact worth knowing: a *partial* apply-system run leaves
    `theme-system.sh`'s Yaru icon files unowned in `/usr/share/icons`, and the
    next `yaru-icon-theme` install fails on file conflicts. Fresh from
@@ -229,7 +229,7 @@ What the real run found, and what changed because of it:
    `packages-failed.txt`. **mise OK** (`mise install` ran for real).
    services OK — every unit already enabled, because restoring
    `~/.config/systemd/user` carries the `*.wants` symlinks. verify OK.
-7. `omocachy-doctor.sh --bundle` on the migrated CachyOS guest: 0 failed,
+7. `omacachy-doctor.sh --bundle` on the migrated CachyOS guest: 0 failed,
    1 warning (the 3 packages above); the CachyOS-specific checks
    (`ID=cachyos`, `[cachyos*]` repos, HOOKS drop-in, no `/etc/sddm.conf`)
    all PASS for the first time on a real host.
@@ -280,7 +280,7 @@ btrfs UUID survives, so `root=UUID=` and fstab needed no change.
   ran only as dry-run here.
 - **`--restore-host-specific`** is code-reviewed but not executed:
   implemented and documented (`README.md` §6,
-  `bin/omocachy-profile-import.sh`), but no real migration has exercised it.
+  `bin/omacachy-profile-import.sh`), but no real migration has exercised it.
 - The CachyOS lab guest itself (`LAB_DISTRO=cachyos`) lives on the
   `cachyos-guest` branch of a second lab checkout; the driver's 90 s
   live-desktop wait and the launch keystrokes are measured on this host

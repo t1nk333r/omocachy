@@ -40,7 +40,7 @@ the prompt in the same move.
   — adjust ranges to what you find).
 - `bin/lib/common.sh` also provides `write_user_file`, `have`, `info`, `warn`,
   `die`, `require_not_root`, `require_cmds`, `confirm`, `start_logging`, and a
-  re-source guard (`OMOCACHY_COMMON_SH`). Its header says "Sourced, never
+  re-source guard (`OMACACHY_COMMON_SH`). Its header says "Sourced, never
   executed".
 - The non-CachyOS prompt:
   ```bash
@@ -61,8 +61,8 @@ the prompt in the same move.
   declines. Auto-true when ASSUME_YES or DRY_RUN is set, so a plan can always
   be printed unattended."
 - The wrapper is the only script in the repo that does not source the library;
-  `bin/nvidia.sh:17`, `bin/amd-rocm.sh:11`, `bin/omocachy-profile-*.sh` and
-  `bin/omocachy-doctor.sh` all do.
+  `bin/nvidia.sh:17`, `bin/amd-rocm.sh:11`, `bin/omacachy-profile-*.sh` and
+  `bin/omacachy-doctor.sh` all do.
 
 ## Commands you will need
 
@@ -90,8 +90,8 @@ helpers (keep them; they are the sysroot seam).
 ### Step 1: Capture the baseline output
 
 ```bash
-cd /home/t1nk33r/Projects/omocachy/omocachy
-OMOCACHY_LOG=/tmp/omocachy-fixed.log bin/install-omarchy-quattro.sh --dry-run --yes >/tmp/dryrun-pre.txt 2>&1; echo "rc=$?"
+cd /home/t1nk33r/Projects/omacachy/omacachy
+OMACACHY_LOG=/tmp/omacachy-fixed.log bin/install-omarchy-quattro.sh --dry-run --yes >/tmp/dryrun-pre.txt 2>&1; echo "rc=$?"
 sed -E 's/20[0-9]{6,12}/TS/g' /tmp/dryrun-pre.txt >/tmp/dryrun-pre.norm
 ```
 
@@ -148,7 +148,7 @@ in your report so the reviewer sees it.
 ### Step 5: Prove nothing else changed
 
 ```bash
-OMOCACHY_LOG=/tmp/omocachy-fixed.log bin/install-omarchy-quattro.sh --dry-run --yes >/tmp/dryrun-post.txt 2>&1; echo "rc=$?"
+OMACACHY_LOG=/tmp/omacachy-fixed.log bin/install-omarchy-quattro.sh --dry-run --yes >/tmp/dryrun-post.txt 2>&1; echo "rc=$?"
 sed -E 's/20[0-9]{6,12}/TS/g' /tmp/dryrun-post.txt >/tmp/dryrun-post.norm
 diff /tmp/dryrun-pre.norm /tmp/dryrun-post.norm && echo "identical"
 ```

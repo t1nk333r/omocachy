@@ -52,7 +52,7 @@ plus the transcript:
 
 ## What changed
 
-`bin/omocachy-profile-import.sh`
+`bin/omacachy-profile-import.sh`
 
 - **The runtime probe is not fatal** (item 1). It is now guarded by
   `[[ -d $XDG_RUNTIME_DIR/hypr ]]` and `|| true`, and an empty result simply
@@ -82,7 +82,7 @@ plus the transcript:
   did not install)`, each failure named with its reason in the output and listed
   in `packages-failed.txt`. Policy skips never enter that list.
 
-`bin/omocachy-profile-export.sh`
+`bin/omacachy-profile-export.sh`
 
 - **Records the source repo per package** (item 4): one `pacman -Si` per
   explicit package into `packages/repos.tsv` (`<pkg>\t<repo>`, `aur` for names no
@@ -123,7 +123,7 @@ fails the run.
   same table (`packages.repo_of[]`).
 - Guest (GRUB CachyOS lab, fresh wrapper install, **no live session**, egress),
   archive + `.sha256` transferred, `sha256sum -c` **OK**, bundle exported by the
-  fixed exporter (`omocachy-profile-luna-20260911-224932`):
+  fixed exporter (`omacachy-profile-luna-20260911-224932`):
   - one uninterrupted `--bundle … --yes` run: `configs: OK`, `packages: OK`,
     `mise: OK`, `services: OK`, `verify: OK` — no abort, all five stages.
     The packages stage installed 59 packages from configured repos in one
@@ -135,7 +135,7 @@ fails the run.
   - a second identical run (idempotency, and the exit status the first run's
     `nohup` could not report): **exit 0**, same five-stage result,
     `packages-failed.txt` absent again.
-  - `bin/omocachy-doctor.sh --bundle <archive>`: **exit 0, 0 failed, 1 warning**
+  - `bin/omacachy-doctor.sh --bundle <archive>`: **exit 0, 0 failed, 1 warning**
     ("3 explicit package(s) from the bundle are not installed here (8 more
     denied by policy)") — those 3 are exactly the packages the run printed a
     policy reason for. `hyprctl`/`omarchy-shell` IPC and the GPU-session check
@@ -169,5 +169,5 @@ fails the run.
   contract is merge-not-delete, and pacman cannot take the removal decision
   under `--noconfirm`; the printed reason and the one-command hint are the
   honest version.
-- **Editing `bin/omocachy-doctor.sh`**: out of scope for this change. Its own
+- **Editing `bin/omacachy-doctor.sh`**: out of scope for this change. Its own
   hypr-probe has no `-e`, which is why it survived the same pipeline.

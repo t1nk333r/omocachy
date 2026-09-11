@@ -6,7 +6,7 @@
 > the status row for this plan in `plans/README.md` (or leave it to the
 > reviewer).
 >
-> **Drift check (run first)**: `git diff --stat e80b564..HEAD -- bin/lib/profile.sh bin/omocachy-profile-export.sh`
+> **Drift check (run first)**: `git diff --stat e80b564..HEAD -- bin/lib/profile.sh bin/omacachy-profile-export.sh`
 > On a mismatch with the excerpts below, treat it as a STOP condition.
 
 ## Status
@@ -44,7 +44,7 @@ instruction to treat a clean bundle as clean.
     # API keys live there) are part of the desktop profile and must travel.
     PROFILE_SECRET_CONTENT_RE='(api[_-]?key|apikey|access[_-]?token|bearer |client[_-]?secret|password)['"'"'"]?\s*[:=]'
     ```
-- `bin/omocachy-profile-export.sh:245-252`:
+- `bin/omacachy-profile-export.sh:245-252`:
   ```bash
   INLINE_SECRETS="$WORK/inline-secrets.txt"
   : >"$INLINE_SECRETS"
@@ -62,13 +62,13 @@ instruction to treat a clean bundle as clean.
 | Purpose | Command | Expected on success |
 |---|---|---|
 | Regex unit check | the `printf | grep` loop in Step 2 | every line matches |
-| Export dry run | `bin/omocachy-profile-export.sh --out /tmp/omocachy-sweep --dry-run` | exit 0, prints the plan |
+| Export dry run | `bin/omacachy-profile-export.sh --out /tmp/omacachy-sweep --dry-run` | exit 0, prints the plan |
 | Lint | `bash -n bin/*.sh bin/lib/*.sh tests/run.sh && shellcheck --severity=warning -x bin/*.sh bin/lib/*.sh tests/run.sh` | exit 0 |
 | Fixture suite | `tests/run.sh` | `0 failed` |
 
 ## Scope
 
-**In scope**: `bin/lib/profile.sh`, `bin/omocachy-profile-export.sh` (the one
+**In scope**: `bin/lib/profile.sh`, `bin/omacachy-profile-export.sh` (the one
 grep invocation), one regression case in `tests/run.sh`.
 
 **Out of scope**: the name sweep's decision to let `shell.json` travel (that
@@ -102,7 +102,7 @@ Step 2.)
 Change the export's grep to `grep -rliE`. Then:
 
 ```bash
-cd /home/t1nk33r/Projects/omocachy/omocachy
+cd /home/t1nk33r/Projects/omacachy/omacachy
 bash -c '
 source bin/lib/profile.sh
 for s in "apiKey = \"x\"" "API_KEY: y" "GITHUB_TOKEN=z" "AWS_SECRET_ACCESS_KEY=w" "access_token: t" "password: p"; do
@@ -145,7 +145,7 @@ Add a case that sources `bin/lib/profile.sh` and runs the Step 2 loops (the
 
 ### Step 5: Export dry run
 
-**Verify**: `bin/omocachy-profile-export.sh --out /tmp/omocachy-sweep --dry-run`
+**Verify**: `bin/omacachy-profile-export.sh --out /tmp/omacachy-sweep --dry-run`
 → exit 0. (Dry run does not perform the sweep; this only proves the script
 still parses.)
 

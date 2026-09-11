@@ -21,7 +21,7 @@
 ## Why this matters
 
 The importer installs the bundle's explicit package list as root with
-`--noconfirm` (`bin/omocachy-profile-import.sh:356-359`, and through
+`--noconfirm` (`bin/omacachy-profile-import.sh:356-359`, and through
 paru/yay at `:374`). The deny policy exists to keep kernels, bootloaders and
 the driver stack under CachyOS's install and `chwd` — but two of its regexes
 have holes: the bootloader rule matches the long-removed name `refind-efi`
@@ -111,7 +111,7 @@ offending alternation.
 ### Step 3: Probe the policy directly
 
 ```bash
-cd /home/t1nk33r/Projects/omocachy/omocachy
+cd /home/t1nk33r/Projects/omacachy/omacachy
 bash -c '
 source bin/lib/profile.sh
 deny="mesa-git lib32-mesa vulkan-radeon lib32-vulkan-radeon xf86-video-amdgpu opencl-mesa lib32-opencl-nvidia intel-media-driver refind syslinux limine-mkinitcpio-hook grub-btrfs nvidia-580xx-utils rocm-hip-runtime cuda"

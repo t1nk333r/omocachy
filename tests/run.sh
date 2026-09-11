@@ -1,5 +1,5 @@
 #!/bin/bash
-# omocachy test suite. Runs on any Arch-based host; changes nothing.
+# omacachy test suite. Runs on any Arch-based host; changes nothing.
 #
 #   tests/run.sh              everything
 #   tests/run.sh lint         bash -n + shellcheck
@@ -52,9 +52,9 @@ run_lint() {
     # The documented local gate is warning severity with -x (handoff.md);
     # CI keeps the stricter --severity=error floor.
     SHELLCHECK_BIN="${SHELLCHECK_BIN:-shellcheck}"
-    if [[ -n ${OMOCACHY_SKIP_SHELLCHECK:-} ]]; then
+    if [[ -n ${OMACACHY_SKIP_SHELLCHECK:-} ]]; then
         # Explicit, visible opt-out for machines without shellcheck.
-        echo "skip shellcheck (OMOCACHY_SKIP_SHELLCHECK set)"
+        echo "skip shellcheck (OMACACHY_SKIP_SHELLCHECK set)"
     elif command -v "$SHELLCHECK_BIN" &>/dev/null; then
         if "$SHELLCHECK_BIN" --severity=warning -x "$REPO_DIR"/bin/*.sh "$REPO_DIR"/bin/lib/*.sh "$TESTS_DIR"/run.sh >"$WORK/sc" 2>&1; then
             ok "shellcheck --severity=warning -x"
@@ -62,7 +62,7 @@ run_lint() {
             bad "shellcheck --severity=warning -x" "$(cat "$WORK/sc")"
         fi
     else
-        bad "lint: shellcheck not installed — install it, set SHELLCHECK_BIN, or set OMOCACHY_SKIP_SHELLCHECK=1 to skip deliberately"
+        bad "lint: shellcheck not installed — install it, set SHELLCHECK_BIN, or set OMACACHY_SKIP_SHELLCHECK=1 to skip deliberately"
     fi
 }
 
@@ -180,9 +180,9 @@ dry_run_fixture() { # FIXTURE OUT DEC [extra args...]
     local fixture="$1" out="$2" dec="$3"; shift 3
     : >"$dec"
     PATH="$(omarchy_stubs):$PATH" \
-    OMOCACHY_SYSROOT="$FIXTURES/$fixture" \
-    OMOCACHY_DECISIONS_FILE="$dec" \
-    OMOCACHY_LOG="$WORK/$fixture.log" \
+    OMACACHY_SYSROOT="$FIXTURES/$fixture" \
+    OMACACHY_DECISIONS_FILE="$dec" \
+    OMACACHY_LOG="$WORK/$fixture.log" \
         "$INSTALLER" --dry-run --yes "$@" >"$out" 2>&1
 }
 
@@ -259,9 +259,9 @@ run_purity() {
     local out="$WORK/purity.out" dec="$WORK/purity.dec"
     : >"$dec"
     PATH="$shim:$PATH" \
-    OMOCACHY_SYSROOT="$FIXTURES/cachyos-limine-luks" \
-    OMOCACHY_DECISIONS_FILE="$dec" \
-    OMOCACHY_LOG="$WORK/purity.log" \
+    OMACACHY_SYSROOT="$FIXTURES/cachyos-limine-luks" \
+    OMACACHY_DECISIONS_FILE="$dec" \
+    OMACACHY_LOG="$WORK/purity.log" \
         "$INSTALLER" --dry-run --yes >"$out" 2>&1
     local rc=$?
     expect_eq "dry run completes with the stubs first on PATH" "0" "$rc"
@@ -271,9 +271,9 @@ run_purity() {
     # Same for the non-Limine path, which has more moving parts.
     : >"$log"
     PATH="$shim:$PATH" \
-    OMOCACHY_SYSROOT="$FIXTURES/cachyos-grub-plain" \
-    OMOCACHY_DECISIONS_FILE="$WORK/purity2.dec" \
-    OMOCACHY_LOG="$WORK/purity2.log" \
+    OMACACHY_SYSROOT="$FIXTURES/cachyos-grub-plain" \
+    OMACACHY_DECISIONS_FILE="$WORK/purity2.dec" \
+    OMACACHY_LOG="$WORK/purity2.log" \
         "$INSTALLER" --dry-run --yes >"$WORK/purity2.out" 2>&1
     rc=$?
     expect_eq "grub dry run completes with the stubs first on PATH" "0" "$rc"
@@ -635,13 +635,13 @@ run_gpu() {
     # consulting lspci at all; that vendor then no-ops on this GPU-less host.
     for s in nvidia amd-rocm; do
         out="$d/seam-$s.out"
-        PATH="$d/empty:$PATH" OMOCACHY_GPU_TYPE="${s%-rocm}" \
+        PATH="$d/empty:$PATH" OMACACHY_GPU_TYPE="${s%-rocm}" \
             bash "$REPO_DIR/bin/gpu-setup.sh" --dry-run >"$out" 2>&1
         expect_contains "detector seam: ${s%-rocm} dispatches to $s.sh" "running $s.sh" "$(cat "$out")"
     done
 
     out="$d/seam-bogus.out"
-    OMOCACHY_GPU_TYPE=bogus bash "$REPO_DIR/bin/gpu-setup.sh" >"$out" 2>&1
+    OMACACHY_GPU_TYPE=bogus bash "$REPO_DIR/bin/gpu-setup.sh" >"$out" 2>&1
     rc=$?
     expect_eq "unknown detector value: exit 1" "1" "$rc"
     expect_contains "unknown detector value: the dispatcher says so" \
@@ -675,7 +675,7 @@ run_guard() {
     # PATH: the preflight is not the subject here — the manifest is — and on a
     # runner without pacman it aborted before the refusal could be printed.
     PATH="$(pacman_stub):$PATH" \
-        bash "$REPO_DIR/bin/omocachy-profile-import.sh" \
+        bash "$REPO_DIR/bin/omacachy-profile-import.sh" \
         --dry-run --yes --bundle "$d/evil" --only configs >"$out" 2>&1
     rc=$?
     expect_eq "manifest: a .. entry makes the import exit 1" "1" "$rc"
@@ -757,7 +757,7 @@ run_guard() {
     mkdir -p "$d/doctor/bundle"
     printf '{}\n' >"$d/doctor/bundle/manifest.json"
     out="$d/doctor/out"
-    bash "$REPO_DIR/bin/omocachy-doctor.sh" --bundle "$d/doctor/bundle" >"$out" 2>&1
+    bash "$REPO_DIR/bin/omacachy-doctor.sh" --bundle "$d/doctor/bundle" >"$out" 2>&1
     rc=$?
     expect_eq "doctor: an unreadable manifest exits 1" "1" "$rc"
     expect_contains "doctor: the unreadable manifest is named" \
@@ -786,19 +786,19 @@ run_rollback() {
     # a test would mean reloading the operator's desktop.
     _rollback_import() { # HOME
         env PATH="$(pacman_stub):$PATH" HOME="$1" XDG_RUNTIME_DIR="$WORK/rollback/xdg" HYPRLAND_INSTANCE_SIGNATURE=none \
-            bash "$REPO_DIR/bin/omocachy-profile-import.sh" \
+            bash "$REPO_DIR/bin/omacachy-profile-import.sh" \
             --bundle "$d" --only configs --yes 2>&1
     }
 
     # 1. Happy path, over a dangling symlink.
     h="$WORK/rollback/home"
     mkdir -p "$h/.config/hypr"
-    ln -s /nonexistent-omocachy-target "$h/.config/hypr/hyprland.lua"
+    ln -s /nonexistent-omacachy-target "$h/.config/hypr/hyprland.lua"
 
     out="$(_rollback_import "$h")"
     rc=$?
     expect_eq "rollback: the configs merge succeeds" "0" "$rc"
-    dir="$(echo "$h"/.local/state/omocachy/backups/import-*)"
+    dir="$(echo "$h"/.local/state/omacachy/backups/import-*)"
     expect_eq "rollback: the undo is executable after the merge" "yes" \
         "$([[ -x $dir/rollback.sh ]] && echo yes)"
     expect_eq "rollback: the touched-path list sits beside it" "yes" \
@@ -816,13 +816,13 @@ run_rollback() {
     # exist, and what was already touched must not die with the temp dir.
     h="$WORK/rollback/failed-home"
     mkdir -p "$h/.config/hypr" "$h/.local"
-    ln -s /nonexistent-omocachy-target "$h/.config/hypr/hyprland.lua"
+    ln -s /nonexistent-omacachy-target "$h/.config/hypr/hyprland.lua"
     chmod 500 "$h/.config/hypr"    # the backup reads it; the merge into it cannot
 
     out="$(_rollback_import "$h")"
     rc=$?
     chmod 700 "$h/.config/hypr"
-    dir="$(echo "$h"/.local/state/omocachy/backups/import-*)"
+    dir="$(echo "$h"/.local/state/omacachy/backups/import-*)"
     expect_eq "rollback: an unwritable target fails the merge" "1" "$rc"
     expect_contains "rollback: the failure message names the undo" \
         "rollback: $dir/rollback.sh" "$out"
@@ -838,11 +838,11 @@ run_rollback() {
     # $HOME. The canary sits in the parent directory the entry would reach.
     h="$WORK/rollback/tamper/home"
     mkdir -p "$h/.config/hypr"
-    ln -s /nonexistent-omocachy-target "$h/.config/hypr/hyprland.lua"
+    ln -s /nonexistent-omacachy-target "$h/.config/hypr/hyprland.lua"
     printf 'canary\n' >"$WORK/rollback/tamper/canary"
 
     _rollback_import "$h" >"$WORK/rollback/tamper/import.out" 2>&1
-    dir="$(echo "$h"/.local/state/omocachy/backups/import-*)"
+    dir="$(echo "$h"/.local/state/omacachy/backups/import-*)"
     printf '..\texisted\n' >>"$dir/restored.tsv"
     out="$("$dir/rollback.sh" 2>&1)"
     rc=$?
@@ -924,7 +924,7 @@ STUB
     # install was reclassified as "the bundle names a repo this machine does
     # not configure", and a genuine failure exited 0 with no failed list — the
     # answers have to be the fixture's, not the host's. These are the repos the
-    # bundles below install from; omocachy-test-repo deliberately stays absent.
+    # bundles below install from; omacachy-test-repo deliberately stays absent.
     cat >"$shim/pacman-conf" <<'STUB'
 #!/bin/sh
 case "${1:-}" in
@@ -953,7 +953,7 @@ run_packages() {
         local bundle="$1" home="$2"
         mkdir -p "$home"
         env PATH="$shim:$PATH" HOME="$home" PKG_STUB_DIR="$stub" \
-            bash "$REPO_DIR/bin/omocachy-profile-import.sh" \
+            bash "$REPO_DIR/bin/omacachy-profile-import.sh" \
             --bundle "$bundle" --only packages --yes
     }
 
@@ -1013,30 +1013,30 @@ SI
     #    honest — a package the helper *can* get (whether recorded from an
     #    unconfigured repo or from a configured one) is still installed, never
     #    pre-skipped for its origin.
-    printf '%s\n' omocachy-tests-only-in-absent-repo omocachy-tests-only-in-aur \
+    printf '%s\n' omacachy-tests-only-in-absent-repo omacachy-tests-only-in-aur \
         >"$d/bundle/packages/explicit-native.txt"
-    printf 'omocachy-tests-only-in-absent-repo\tomocachy-test-repo\nomocachy-tests-only-in-aur\textra\n' \
+    printf 'omacachy-tests-only-in-absent-repo\tomacachy-test-repo\nomacachy-tests-only-in-aur\textra\n' \
         >"$d/bundle/packages/repos.tsv"
     : >"$stub/installed.txt"
     : >"$stub/calls.log"
-    printf 'omocachy-tests-only-in-absent-repo\n' >"$stub/fail-helper"
+    printf 'omacachy-tests-only-in-absent-repo\n' >"$stub/fail-helper"
     rm -f "$stub/attempts"
     out="$(pkg_import "$d/bundle" "$WORK/pkg/home3" 2>&1)"
     rc=$?
-    rep="$(echo "$WORK/pkg/home3"/.local/state/omocachy/reports/import-*)"
+    rep="$(echo "$WORK/pkg/home3"/.local/state/omacachy/reports/import-*)"
     expect_eq "packages: a helper failure for an unconfigured repo exits 0" "0" "$rc"
     expect_contains "packages: it is reported as a policy skip" \
-        "policy: omocachy-tests-only-in-absent-repo" "$out"
+        "policy: omacachy-tests-only-in-absent-repo" "$out"
     expect_contains "packages: the reason names the repository" \
-        "source repo 'omocachy-test-repo' is not configured here" "$out"
+        "source repo 'omacachy-test-repo' is not configured here" "$out"
     expect_eq "packages: the reclassified skip is not a failure" "no" \
         "$([[ -f $rep/packages-failed.txt ]] && echo yes || echo no)"
     expect_contains "packages: the skip is written to the policy report" \
-        "omocachy-test-repo" "$(cat "$rep/packages-skipped-by-policy.tsv" 2>/dev/null)"
+        "omacachy-test-repo" "$(cat "$rep/packages-skipped-by-policy.tsv" 2>/dev/null)"
     expect_contains "packages: a package from a configured repo still goes to the helper" \
-        "paru -S --needed --noconfirm -- omocachy-tests-only-in-aur" "$(cat "$stub/calls.log")"
+        "paru -S --needed --noconfirm -- omacachy-tests-only-in-aur" "$(cat "$stub/calls.log")"
     expect_contains "packages: the helper's package is recorded as foreign" \
-        "omocachy-tests-only-in-aur" "$(cat "$rep/packages-foreign.txt" 2>/dev/null)"
+        "omacachy-tests-only-in-aur" "$(cat "$rep/packages-foreign.txt" 2>/dev/null)"
 
     # The control: the same package, with a helper that can get it (the AUR has
     # helium-browser-bin though the source machine's repo was chaotic-aur). It
@@ -1048,9 +1048,9 @@ SI
     rc=$?
     expect_eq "packages: a package the helper can get exits 0" "0" "$rc"
     expect_eq "packages: an obtainable package is never pre-skipped for its repo" "" \
-        "$(sed -n '/^    policy: omocachy-tests-only-in-absent-repo/p' <<<"$out")"
+        "$(sed -n '/^    policy: omacachy-tests-only-in-absent-repo/p' <<<"$out")"
     expect_contains "packages: the obtainable package is installed by the helper" \
-        "paru -S --needed --noconfirm -- omocachy-tests-only-in-absent-repo" "$(cat "$stub/calls.log")"
+        "paru -S --needed --noconfirm -- omacachy-tests-only-in-absent-repo" "$(cat "$stub/calls.log")"
 
     # 3. A stale database: the name is still in the DB while the file behind it
     #    has been rolled off the mirror, so the batch dies on a 404. Refresh
@@ -1065,7 +1065,7 @@ SI
     printf "error: failed retrieving file 'python-matplotlib-3.10.7-1-x86_64.pkg.tar.zst' from mirror: The requested URL returned error: 404\n" >"$stub/fail-output"
     out="$(pkg_import "$d/bundle" "$WORK/pkg/home4" 2>&1)"
     rc=$?
-    rep="$(echo "$WORK/pkg/home4"/.local/state/omocachy/reports/import-*)"
+    rep="$(echo "$WORK/pkg/home4"/.local/state/omacachy/reports/import-*)"
     expect_eq "packages: a stale-database retry exits 0" "0" "$rc"
     expect_contains "packages: the databases are refreshed once before the retry" \
         "refresh" "$(cat "$stub/calls.log")"
@@ -1109,7 +1109,7 @@ SI
     : >"$stub/fail-output"
     out="$(pkg_import "$d/bundle" "$WORK/pkg/home6" 2>&1)"
     rc=$?
-    rep="$(echo "$WORK/pkg/home6"/.local/state/omocachy/reports/import-*)"
+    rep="$(echo "$WORK/pkg/home6"/.local/state/omacachy/reports/import-*)"
     expect_eq "packages: a real failure exits non-zero" "1" "$rc"
     expect_contains "packages: the stage is reported FAILED" "packages: FAILED" "$out"
     expect_eq "packages: the failing package is listed in packages-failed.txt" "mangohud" \
@@ -1125,13 +1125,13 @@ SI
 run_probe() {
     head_ "no-session runtime probe"
     local d="$WORK/probe/bundle" h out rc
-    mkdir -p "$d/home/.config/omocachy-test" "$WORK/probe/xdg"
-    printf 'from the bundle\n' >"$d/home/.config/omocachy-test/marker"
-    printf '{"schema":1,"source":{"host":"test","user":"me","home":"/home/me"},"payload":{"captured":[".config/omocachy-test"]}}\n' >"$d/manifest.json"
+    mkdir -p "$d/home/.config/omacachy-test" "$WORK/probe/xdg"
+    printf 'from the bundle\n' >"$d/home/.config/omacachy-test/marker"
+    printf '{"schema":1,"source":{"host":"test","user":"me","home":"/home/me"},"payload":{"captured":[".config/omacachy-test"]}}\n' >"$d/manifest.json"
 
     _probe_import() { # HOME
         env -u HYPRLAND_INSTANCE_SIGNATURE PATH="$(pacman_stub):$PATH" HOME="$1" XDG_RUNTIME_DIR="$WORK/probe/xdg" \
-            bash "$REPO_DIR/bin/omocachy-profile-import.sh" \
+            bash "$REPO_DIR/bin/omacachy-profile-import.sh" \
             --bundle "$d" --only configs --yes 2>&1
     }
 
@@ -1143,7 +1143,7 @@ run_probe() {
     expect_contains "probe: the configs stage is reported OK" "configs: OK" "$out"
     expect_contains "probe: the run reaches the result summary" "--- Result ---" "$out"
     expect_eq "probe: the payload is still merged" "from the bundle" \
-        "$(cat "$h/.config/omocachy-test/marker" 2>/dev/null)"
+        "$(cat "$h/.config/omacachy-test/marker" 2>/dev/null)"
 
     # An instance directory that exists but no compositor answers it: the probe
     # adopts it, hyprctl then fails, and that is still not an error.

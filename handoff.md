@@ -1,4 +1,4 @@
-# Handoff — omocachy
+# Handoff — omacachy
 
 Orientation for whoever (human or agent) picks this project up next.
 Updated 2026-09-11. User-facing docs live in
@@ -17,9 +17,9 @@ new machine:
 |---|---|---|
 | Omarchy 4 "Quattro" package wrapper | `bin/install-omarchy-quattro.sh` | Reconciled against installed 4.0.2 (plan 015), backed by a fixture matrix (`tests/run.sh`, plan 016) and **run end to end on real CachyOS guests: Limine, Limine+LUKS2 (root converted in place) and GRUB** (plans 016/017); systemd-boot is fixture-only; the installed release has since moved to 4.0.3, which the wrapper now warns about (see below) |
 | v4 per-item debloat picker | `bin/debloat-quattro.sh` | Built, mock-verified, needs real-v4 TUI run |
-| Profile migration (export → import → doctor) | `bin/omocachy-profile-export.sh`, `bin/omocachy-profile-import.sh`, `bin/omocachy-doctor.sh` | Plan 018. Exercised end to end for real in the Omarchy lab VM (export, import onto a pristine guest, screenshot of the migrated desktop, `./lab test` green, rollback, re-import); the `packages` and `mise` stages ran online against a real CachyOS guest |
+| Profile migration (export → import → doctor) | `bin/omacachy-profile-export.sh`, `bin/omacachy-profile-import.sh`, `bin/omacachy-doctor.sh` | Plan 018. Exercised end to end for real in the Omarchy lab VM (export, import onto a pristine guest, screenshot of the migrated desktop, `./lab test` green, rollback, re-import); the `packages` and `mise` stages ran online against a real CachyOS guest |
 | Shared helpers | `bin/lib/common.sh`, `bin/lib/profile.sh`, `share/profile-paths.conf` | `common.sh` is the dry-run contract shared by the profile scripts; `profile.sh` owns bundle schema 1 and the exclude/secret/package policies |
-| GPU dispatch | `bin/gpu-detect.sh` → `gpu-setup.sh` → `nvidia.sh`/`amd-rocm.sh` | Working; NVIDIA probes the PCI id for the generation and warns on the one broken combination (open module, pre-Turing), installs `libva-nvidia-driver`, and writes a `modeset=1` drop-in only when nothing else sets one; AMD is VA-API-only; session env goes to `~/.config/uwsm/env.d/50-omocachy-gpu`, never `~/.config/uwsm/env`; all honour `--dry-run` |
+| GPU dispatch | `bin/gpu-detect.sh` → `gpu-setup.sh` → `nvidia.sh`/`amd-rocm.sh` | Working; NVIDIA probes the PCI id for the generation and warns on the one broken combination (open module, pre-Turing), installs `libva-nvidia-driver`, and writes a `modeset=1` drop-in only when nothing else sets one; AMD is VA-API-only; session env goes to `~/.config/uwsm/env.d/50-omacachy-gpu`, never `~/.config/uwsm/env`; all honour `--dry-run` |
 
 ## Version policy
 
@@ -62,7 +62,7 @@ maintenance isolated there and do not reintroduce those scripts to `main`.
    rescue`, `cryptsetup reencrypt`, `sd-encrypt` + `rd.luks.uuid=`) —
    produced the plan-017 corrections, the LUKS boot evidence and the profile
    migration (plan 018). 2026-09-11: the two parallel work lines
-   (wrapper/tests on `main`, profile/LUKS on `omocachy`) were consolidated
+   (wrapper/tests on `main`, profile/LUKS on `omacachy`) were consolidated
    into one branch.
 
 ## Working conventions (keep these)
@@ -80,7 +80,7 @@ maintenance isolated there and do not reintroduce those scripts to `main`.
   (`-x` so the sourced `bin/lib/` helpers are followed; shellcheck 0.11
   locally, CI at `--severity=error` via the `Jenkinsfile`). `tests/run.sh
   lint` enforces exactly this invocation, and fails — rather than silently
-  skipping — when shellcheck is missing; set `OMOCACHY_SKIP_SHELLCHECK=1`
+  skipping — when shellcheck is missing; set `OMACACHY_SKIP_SHELLCHECK=1`
   to opt out visibly. Run it before every push, and `tests/run.sh` before
   and after touching the wrapper.
 - Every state-changing script offers `--dry-run`; privileged ops flow
