@@ -47,14 +47,20 @@ run_lint() {
     for f in "$REPO_DIR"/bin/*.sh "$REPO_DIR"/bin/lib/*.sh "$TESTS_DIR"/run.sh; do
         if bash -n "$f" 2>"$WORK/err"; then ok "bash -n $(basename "$f")"; else bad "bash -n $(basename "$f")" "$(cat "$WORK/err")"; fi
     done
-    if command -v shellcheck &>/dev/null; then
-        if shellcheck --severity=error "$REPO_DIR"/bin/*.sh "$REPO_DIR"/bin/lib/*.sh "$TESTS_DIR"/run.sh >"$WORK/sc" 2>&1; then
-            ok "shellcheck --severity=error"
+    # The documented local gate is warning severity with -x (handoff.md);
+    # CI keeps the stricter --severity=error floor.
+    SHELLCHECK_BIN="${SHELLCHECK_BIN:-shellcheck}"
+    if [[ -n ${OMOCACHY_SKIP_SHELLCHECK:-} ]]; then
+        # Explicit, visible opt-out for machines without shellcheck.
+        echo "skip shellcheck (OMOCACHY_SKIP_SHELLCHECK set)"
+    elif command -v "$SHELLCHECK_BIN" &>/dev/null; then
+        if "$SHELLCHECK_BIN" --severity=warning -x "$REPO_DIR"/bin/*.sh "$REPO_DIR"/bin/lib/*.sh "$TESTS_DIR"/run.sh >"$WORK/sc" 2>&1; then
+            ok "shellcheck --severity=warning -x"
         else
-            bad "shellcheck --severity=error" "$(cat "$WORK/sc")"
+            bad "shellcheck --severity=warning -x" "$(cat "$WORK/sc")"
         fi
     else
-        echo "skip shellcheck (not installed)"
+        bad "lint: shellcheck not installed — install it, set SHELLCHECK_BIN, or set OMOCACHY_SKIP_SHELLCHECK=1 to skip deliberately"
     fi
 }
 

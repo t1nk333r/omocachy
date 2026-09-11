@@ -78,8 +78,11 @@ maintenance isolated there and do not reintroduce those scripts to `main`.
 - **Lint gate**: `bash -n bin/*.sh bin/lib/*.sh tests/run.sh` plus
   `shellcheck --severity=warning -x bin/*.sh bin/lib/*.sh tests/run.sh`
   (`-x` so the sourced `bin/lib/` helpers are followed; shellcheck 0.11
-  locally, CI at `--severity=error` via the `Jenkinsfile`). Run it before
-  every push, and `tests/run.sh` before and after touching the wrapper.
+  locally, CI at `--severity=error` via the `Jenkinsfile`). `tests/run.sh
+  lint` enforces exactly this invocation, and fails — rather than silently
+  skipping — when shellcheck is missing; set `OMOCACHY_SKIP_SHELLCHECK=1`
+  to opt out visibly. Run it before every push, and `tests/run.sh` before
+  and after touching the wrapper.
 - Every state-changing script offers `--dry-run`; privileged ops flow
   through `run`/`run_root`-style helpers so dry-run is enforceable by grep.
 
