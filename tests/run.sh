@@ -276,13 +276,32 @@ run_units() {
     got="$( ( source "$REPO_DIR/bin/lib/profile.sh"; profile_pkg_denied firefox >/dev/null ) && echo denied || echo allowed )"
     expect_eq "profile_pkg_denied: firefox allowed" "allowed" "$got"
 
-    # 4. omarchy.* plugin ids ship with the omarchy package; only the others
+    # 4. The bootloader and GPU families (plan 024). The bundle can name any
+    # package, so the deny list is a safety floor against a bundle reversing
+    # the target's chwd-selected driver stack or dropping bootloader files on
+    # a Limine machine: mesa-git, refind and syslinux all used to pass. The
+    # allow list is the other half -- the `-.*` families must not be so coarse
+    # that they catch ordinary desktop packages.
+    local name
+    for name in mesa-git lib32-mesa vulkan-radeon lib32-vulkan-radeon \
+        xf86-video-amdgpu opencl-mesa lib32-opencl-nvidia intel-media-driver \
+        refind syslinux limine-mkinitcpio-hook grub-btrfs nvidia-580xx-utils \
+        rocm-hip-runtime cuda; do
+        got="$( ( source "$REPO_DIR/bin/lib/profile.sh"; profile_pkg_denied "$name" >/dev/null ) && echo denied || echo allowed )"
+        expect_eq "profile_pkg_denied: $name denied" "denied" "$got"
+    done
+    for name in firefox neovim ripgrep git jq zoxide mise fd bat; do
+        got="$( ( source "$REPO_DIR/bin/lib/profile.sh"; profile_pkg_denied "$name" >/dev/null ) && echo denied || echo allowed )"
+        expect_eq "profile_pkg_denied: $name allowed" "allowed" "$got"
+    done
+
+    # 5. omarchy.* plugin ids ship with the omarchy package; only the others
     # have to be re-cloned on the target.
     printf '%s\n' '{"plugins":[{"id":"foo.bar"},{"id":"omarchy.builtin"}]}' >"$d/shell.json"
     out="$( source "$REPO_DIR/bin/lib/profile.sh"; profile_shelljson_plugin_ids "$d/shell.json" )"
     expect_eq "profile_shelljson_plugin_ids: builtins filtered out" "foo.bar" "$out"
 
-    # 5. The snapper assertion must never return success without comparing
+    # 6. The snapper assertion must never return success without comparing
     # something. In --verify-only no backup is taken, so the pre-fix body
     # short-circuited to success and printed PASS having compared nothing. The
     # wrapper runs top-level code, so the helper cannot be sourced and the

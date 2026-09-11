@@ -112,8 +112,8 @@ PROFILE_SECRET_CONTENT_RE='(api[_-]?key|apikey|access[_-]?token|bearer |client[_
 # because the decision is the operator's — it is just not automatic.
 PROFILE_PKG_DENY=(
     '^linux(-|$)|-headers$::kernel/headers — the target boots its own CachyOS kernel; changing that is boot-critical'
-    '^(limine|grub|refind-efi|systemd-boot)::bootloader — installed and configured by the CachyOS install'
-    '^(nvidia|lib32-nvidia|opencl-nvidia|nvidia-utils|mesa-vdpau)::GPU driver stack — chwd owns it on CachyOS (bin/gpu-setup.sh)'
+    '^(limine|limine-.*|grub|grub-.*|refind|syslinux|systemd-boot|systemd-boot-.*)$::bootloader — installed and configured by the CachyOS install'
+    '^(nvidia|lib32-nvidia|nvidia-.*|lib32-nvidia-.*|opencl-nvidia|lib32-opencl-nvidia|opencl-.*|lib32-opencl-.*|cuda|lib32-cuda|mesa|lib32-mesa|mesa-.*|lib32-mesa-.*|vulkan-.*|lib32-vulkan-.*|xf86-video-.*|intel-media-.*|libva-.*|lib32-libva-.*|rocm-.*|lib32-rocm-.*|hip-.*)$::GPU driver stack — chwd owns it on CachyOS (bin/gpu-setup.sh)'
     '^(omarchy|omarchy-.*|quickshell|quickshell-git)$::installed by bin/install-omarchy-quattro.sh as packages'
     '^(base|base-devel|pacman|systemd|glibc|linux-firmware.*|mkinitcpio|sddm)$::base system — already provided by CachyOS'
     '^cachyos-::CachyOS metapackages — provided by the target install'
