@@ -19,7 +19,7 @@ provision_user=yes
 limine_default_block=TARGET_OS_NAME="CachyOS";ENABLE_UKI=no;BOOT_ORDER="*, *lts, *fallback, Snapshots";
 # real-CachyOS findings (plan 017): sshd with a Port drop-in, and an
 # /etc/default/limine that assigns KERNEL_CMDLINE with '=' rather than '+='.
-iso_closure=cups avahi docker power-profiles-daemon kernel-modules-hook ufw ufw-docker bluez bluez-utils plocate
+iso_closure=cups avahi docker power-profiles-daemon kernel-modules-hook ufw ufw-docker bluez bluez-utils plocate xdg-user-dirs mise
 ufw_ssh=allowed:22,2222
 omarchy_path_env=written
 limine_cmdline_style=assign-overrides-omarchy

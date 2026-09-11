@@ -520,7 +520,7 @@ UPDATE_GUARD_HOOK=/usr/share/libalpm/hooks/00-omarchy-update-guard.hook
 OMOCACHY_HOOK_DIR=/etc/pacman.d/hooks-omocachy
 OMARCHY_ISO_CLOSURE=(
     cups avahi docker power-profiles-daemon kernel-modules-hook
-    ufw ufw-docker bluez bluez-utils plocate
+    ufw ufw-docker bluez bluez-utils plocate xdg-user-dirs mise
 )
 APPLY_REQUIREMENTS=(
     "unit:cups.service=cups"
@@ -535,6 +535,8 @@ APPLY_REQUIREMENTS=(
     "cmd:ufw=ufw"
     "cmd:ufw-docker=ufw-docker"
     "cmd:updatedb=plocate"
+    "cmd:xdg-user-dirs-update=xdg-user-dirs"
+    "cmd:mise=mise"
 )
 
 unit_exists() {
@@ -1321,6 +1323,9 @@ fi
 #   install/config/firewall.sh          empty `command -v ufw-docker`             -> ufw-docker
 #   install/hardware/bluetooth.sh       "Unit bluetooth.service does not exist"   -> bluez, bluez-utils
 #   install/post-install/localdb.sh     "updatedb: command not found" (exit 127)  -> plocate
+#   omarchy-provision-user:106          "xdg-user-dirs-update: command not found" -> xdg-user-dirs
+#                                       (the user-seeding step, after apply; seen
+#                                       on the minimal CachyOS golden, 2026-09-11)
 # avahi-daemon.service is enabled by the same script; it happened to be present
 # on the pristine guest, and is listed here so it cannot be the next surprise.
 # ufw-docker lives in [omarchy], which is why this cannot run before the repo
