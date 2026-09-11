@@ -221,6 +221,7 @@ systemd initramfs).
   `~/Work/omacachy-station-bundle/omacachy-profile-luna-20260911-233651.tar.zst`
   plus its `.sha256`; the older `~/Work/omocachy-station-bundle/` archives are
   superseded and can be removed once the station is built.
+- **Profile migration hardened** (2026-09-11, plan 044). The import was validated
   against the real luna bundle in a lab guest and the run exposed a blocking
   bug: `omacachy-profile-import.sh` aborted under `set -e`/`pipefail` when
   `/run/user/$UID/hypr` did not exist — exactly the station case of importing
