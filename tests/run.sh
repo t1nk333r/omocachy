@@ -4,6 +4,9 @@
 #   tests/run.sh              everything
 #   tests/run.sh lint         bash -n + shellcheck
 #   tests/run.sh hooks        the mkinitcpio HOOKS merge, against arrays
+#   tests/run.sh units        the pure bin/lib/profile.sh helpers
+#   tests/run.sh picker       the debloat picker's enumeration (--list)
+#   tests/run.sh gpu          GPU vendor dispatch, lspci stubbed
 #   tests/run.sh matrix       the dry run against each tests/fixtures/* sysroot
 #   tests/run.sh purity       the dry-run contract (no state-changing binary runs)
 #
@@ -244,13 +247,108 @@ run_purity() {
     expect_eq "grub dry run executed no state-changing binary" "" "$(cat "$log")"
 }
 
+# ---------------------------------------------------------------------------
+# Pure helpers from bin/lib/profile.sh, sourced directly. They carry the
+# bundle format's hard rules (credential stores are refused, denied packages
+# are named with a reason, only non-omarchy plugin ids need a clone in the
+# bundle), and they need no sysroot to assert on.
+run_units() {
+    head_ "unit helpers"
+    local d="$WORK/units" out got
+    mkdir -p "$d"
+
+    # 1. Credential stores never enter the capture list.
+    printf '%s\n' '.ssh' '.config/hypr' >"$d/paths.conf"
+    out="$( ( source "$REPO_DIR/bin/lib/profile.sh"; profile_read_paths "$d/paths.conf" ) 2>"$d/paths.err" )"
+    expect_eq "profile_read_paths: credential store dropped from the list" ".config/hypr" "$out"
+    expect_contains "profile_read_paths: the refusal is reported" \
+        "refusing to capture credential store: .ssh" "$(cat "$d/paths.err")"
+
+    # 2. The GPU driver stack is never installed by the importer. nvidia-utils
+    # rather than a mesa package: the deny list has always covered the former,
+    # so the case holds before and after plan 024 tightens the mesa rules.
+    got="$( ( source "$REPO_DIR/bin/lib/profile.sh"; profile_pkg_denied nvidia-utils >/dev/null ) && echo denied || echo allowed )"
+    expect_eq "profile_pkg_denied: nvidia-utils denied" "denied" "$got"
+
+    # 3. An ordinary desktop package is not denied.
+    got="$( ( source "$REPO_DIR/bin/lib/profile.sh"; profile_pkg_denied firefox >/dev/null ) && echo denied || echo allowed )"
+    expect_eq "profile_pkg_denied: firefox allowed" "allowed" "$got"
+
+    # 4. omarchy.* plugin ids ship with the omarchy package; only the others
+    # have to be re-cloned on the target.
+    printf '%s\n' '{"plugins":[{"id":"foo.bar"},{"id":"omarchy.builtin"}]}' >"$d/shell.json"
+    out="$( source "$REPO_DIR/bin/lib/profile.sh"; profile_shelljson_plugin_ids "$d/shell.json" )"
+    expect_eq "profile_shelljson_plugin_ids: builtins filtered out" "foo.bar" "$out"
+}
+
+# ---------------------------------------------------------------------------
+# Debloat picker enumeration, driven through the script's documented test-only
+# overrides (bin/debloat-quattro.sh:15-19). Synthetic upstream script, .desktop
+# pair and agent-CLI stub; --list only prints, so nothing here touches the host.
+picker_section() { # OUT HEADER
+    awk -v h="$2:" '$0 == h { on = 1; next } on && /^[^ ]/ { exit } on { print }' "$1"
+}
+
+run_picker() {
+    head_ "debloat picker"
+    local d="$WORK/picker" out rc
+    mkdir -p "$d/apps" "$d/bin"
+    printf '[Desktop Entry]\nExec=omarchy-launch-webapp https://example.invalid\n' >"$d/apps/Example.desktop"
+    printf '[Desktop Entry]\nExec=xdg-terminal-exec --app-id=TUI.devtools\n' >"$d/apps/Devtools.desktop"
+    printf '#!/bin/sh\n' >"$d/bin/codex"
+    : >"$d/bindings.conf"
+    printf '%s\n' 'omarchy-pkg-drop bash neovim' 'rm -f ~/.local/bin/codex' >"$d/upstream.sh"
+
+    out="$d/list.out"
+    DQ_APP_DIR="$d/apps" DQ_BIN_DIR="$d/bin" \
+    DQ_OMARCHY_SCRIPT="$d/upstream.sh" DQ_BINDINGS_FILE="$d/bindings.conf" \
+        bash "$REPO_DIR/bin/debloat-quattro.sh" --list >"$out" 2>&1
+    rc=$?
+    expect_eq "picker: --list runs off a Quattro host" "0" "$rc"
+    # bash is on every Arch host; the package filter asks pacman for the real
+    # installed set, so no other name is guaranteed to appear.
+    expect_contains "picker: installed package enumerated" "  bash" "$(picker_section "$out" "Packages")"
+    expect_eq "picker: webapp enumerated" "  Example" "$(picker_section "$out" "Web apps")"
+    expect_eq "picker: TUI enumerated" "  Devtools" "$(picker_section "$out" "TUIs")"
+    expect_eq "picker: agent CLI stub enumerated" "  codex" "$(picker_section "$out" "Agent CLI stubs")"
+}
+
+# ---------------------------------------------------------------------------
+# GPU vendor dispatch, with lspci stubbed so the answer is ours, not the
+# host's.
+run_gpu() {
+    head_ "GPU dispatch"
+    local d="$WORK/gpu" out rc
+    mkdir -p "$d/empty" "$d/nvidia"
+    printf '#!/bin/sh\nexit 0\n' >"$d/empty/lspci"
+    printf '#!/bin/sh\necho "0000:01:00.0 VGA compatible controller: NVIDIA Corporation"\n' >"$d/nvidia/lspci"
+    chmod +x "$d/empty/lspci" "$d/nvidia/lspci"
+
+    out="$d/none.out"
+    PATH="$d/empty:$PATH" bash "$REPO_DIR/bin/gpu-setup.sh" --dry-run >"$out" 2>&1
+    rc=$?
+    expect_eq "gpu-setup: a GPU-less host exits 0" "0" "$rc"
+    expect_contains "gpu-setup: the none branch is taken" "No GPU detected" "$(cat "$out")"
+
+    # The sysroot seam: a fixture run must not consult the host probe at all,
+    # so stub lspci to claim an NVIDIA card and require the printed summary to
+    # still say none.
+    out="$d/sysroot.out"
+    PATH="$d/nvidia:$PATH" dry_run_fixture cachyos-limine-luks "$out" "$d/sysroot.dec"
+    expect_eq "sysroot run ignores the host GPU probe" "none" \
+        "$(sed -n 's/^.*GPU vendor: *//p' "$out" | tail -1)"
+}
+
 case "${1:-all}" in
     lint)   run_lint ;;
     hooks)  run_hooks ;;
+    units)  run_units ;;
+    picker) run_picker ;;
+    gpu)    run_gpu ;;
     matrix) run_matrix ;;
     purity) run_purity ;;
-    all)    run_lint; run_hooks; run_matrix; run_purity ;;
-    *)      echo "Usage: $0 [lint|hooks|matrix|purity|all]" >&2; exit 2 ;;
+    all)    run_lint; run_hooks; run_units; run_picker; run_gpu; run_matrix; run_purity ;;
+    *)      echo "Usage: $0 [lint|hooks|units|picker|gpu|matrix|purity|all]" >&2; exit 2 ;;
 esac
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"

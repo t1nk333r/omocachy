@@ -459,8 +459,14 @@ fi
 
 MERGED_HOOKS="$(merge_preview "$CURRENT_HOOKS" "$OMARCHY_REFERENCE_HOOKS")" || MERGED_HOOKS=""
 
-# GPU vendor: read-only lspci probe via this repo's own detector.
-GPU_TYPE="$(bash "$SCRIPT_DIR/gpu-detect.sh")"
+# GPU vendor: read-only lspci probe via this repo's own detector. Under a
+# sysroot the fixture host has no GPU and probe output must not leak in from
+# the machine running the test; the value only feeds the printed summary.
+if [[ -n $SYSROOT ]]; then
+    GPU_TYPE="none"
+else
+    GPU_TYPE="$(bash "$SCRIPT_DIR/gpu-detect.sh")"
+fi
 
 REPO_ALREADY_PRESENT=false
 grep -qE '^\[omarchy\]' "$(host_path /etc/pacman.conf)" 2>/dev/null && REPO_ALREADY_PRESENT=true
