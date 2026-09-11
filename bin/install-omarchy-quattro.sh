@@ -520,7 +520,7 @@ UPDATE_GUARD_HOOK=/usr/share/libalpm/hooks/00-omarchy-update-guard.hook
 OMOCACHY_HOOK_DIR=/etc/pacman.d/hooks-omocachy
 OMARCHY_ISO_CLOSURE=(
     cups avahi docker power-profiles-daemon kernel-modules-hook
-    ufw ufw-docker bluez bluez-utils plocate xdg-user-dirs mise
+    ufw ufw-docker bluez bluez-utils plocate xdg-user-dirs mise chromium
 )
 APPLY_REQUIREMENTS=(
     "unit:cups.service=cups"
@@ -537,6 +537,7 @@ APPLY_REQUIREMENTS=(
     "cmd:updatedb=plocate"
     "cmd:xdg-user-dirs-update=xdg-user-dirs"
     "cmd:mise=mise"
+    "cmd:chromium=chromium"
 )
 
 unit_exists() {
