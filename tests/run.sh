@@ -145,7 +145,13 @@ omarchy_stubs() {
     local dir="$WORK/omarchy-stubs" b
     if [[ ! -d $dir ]]; then
         mkdir -p "$dir"
-        for b in omarchy-reinstall-configs omarchy-provision-user omarchy-refresh-limine; do
+        # pacman too: the wrapper's preflight refuses to run anywhere it is
+        # missing ("This script targets an Arch-based system"), and on a CI
+        # runner (ubuntu-latest) its absence aborted every fixture run — which
+        # is what made this suite non-hermetic, passing only on hosts that ship
+        # pacman. The stub makes the lookup succeed and any real call fail
+        # loudly, exactly like the omarchy-* stubs above.
+        for b in omarchy-reinstall-configs omarchy-provision-user omarchy-refresh-limine pacman; do
             printf '#!/bin/sh\necho "test stub: %s must not execute under --dry-run" >&2\nexit 97\n' "$b" >"$dir/$b"
             chmod +x "$dir/$b"
         done
