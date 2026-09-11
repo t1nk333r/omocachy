@@ -279,7 +279,17 @@ systemd initramfs).
    write. Both cases are mutation-checked — removing the early exit or the
    re-check in a copy of the script fails exactly those assertions, so they are
    load-bearing rather than decorative.
-6. **Jenkins agent secret** (above) — then confirm a green build on push.
+6. **CI is GitHub Actions now** (2026-09-11): `.github/workflows/lint.yml`,
+   `name: omocachy`, runs the repo's own gate (`bash -n` over every entry point
+   and helper, `shellcheck --severity=warning -x`, then `tests/run.sh`) on
+   pushes to `main`/`omocachy` and on pull requests, on `ubuntu-latest`. The
+   `Jenkinsfile` is deleted and the Jenkins agent + its unrecoverable secret are
+   retired with it — that item is closed by removal, not by repair. The runner
+   stack's entry for this repository is still named `runner-omarchy`; rename it
+   to `omocachy` there if the self-hosted path is ever wanted back (the workflow
+   would need `runs-on: [self-hosted, linux, docker]`). First runs exposed that
+   the suite was only *apparently* hermetic — it needed a host `pacman` — which
+   is being fixed in the test harness; the gate is a green run on push.
 7. Backlog: opt-in debloat prompt inside the wrapper;
    `--restore-host-specific`; lab hardening (fixed 90 s wait, typed launch
    line) and merging the lab's `cachyos-guest` branch.
