@@ -1459,8 +1459,34 @@ else
         if ((${#BASE_INSTALL[@]})); then
             echo "Installing ${#BASE_INSTALL[@]} of Omarchy's base packages that are not installed yet:"
             printf '    %s\n' "${BASE_INSTALL[*]}"
-            run_root env OMARCHY_ALLOW_DIRECT_PACMAN=1 pacman -S --needed --noconfirm "${BASE_INSTALL[@]}"
-            decide base_packages "installed:${#BASE_INSTALL[@]}"
+            base_log="$(mktemp)"
+            # pipefail is set, so a failing pacman fails this pipeline (tee
+            # alone would report success).
+            if run_root env OMARCHY_ALLOW_DIRECT_PACMAN=1 pacman -S --needed --noconfirm "${BASE_INSTALL[@]}" 2>&1 | tee "$base_log"; then
+                decide base_packages "installed:${#BASE_INSTALL[@]}"
+            else
+                # "exists in filesystem": on a machine provisioned before this
+                # sweep existed, Omarchy's own theme setup already wrote some of
+                # these files unowned (observed: yaru-icon-theme vs
+                # /usr/share/icons/Yaru/scalable/actions/go-{next,previous}
+                # -symbolic.svg). Overwriting exactly the paths pacman named is
+                # what a first install would have done; nothing else is touched.
+                mapfile -t base_conflicts < <(
+                    sed -n 's/^[A-Za-z0-9@._+-]*: \(.*\) exists in filesystem$/\1/p' "$base_log" | sort -u
+                )
+                if ((${#base_conflicts[@]} == 0)); then
+                    rm -f "$base_log"
+                    echo "Error: the base-package install failed and no 'exists in filesystem' paths were named." >&2
+                    echo "Re-run to retry; the output above is in the install log." >&2
+                    exit 1
+                fi
+                echo "Retrying with --overwrite for ${#base_conflicts[@]} file(s) an earlier setup already wrote:"
+                printf '    %s\n' "${base_conflicts[@]}"
+                run_root env OMARCHY_ALLOW_DIRECT_PACMAN=1 pacman -S --needed --noconfirm \
+                    --overwrite "$(printf '%s,' "${base_conflicts[@]}" | sed 's/,$//')" "${BASE_INSTALL[@]}"
+                decide base_packages "installed:${#BASE_INSTALL[@]}"
+            fi
+            rm -f "$base_log"
         else
             echo "Nothing from ${BASE_PACKAGE_LIST} is installable from the configured repos."
             decide base_packages "nothing-installable"

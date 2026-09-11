@@ -40,6 +40,13 @@ because the closure was only ever checked against what the *apply* stages call.
   needs `OMARCHY_ALLOW_DIRECT_PACMAN=1`, like the first install step. Decision:
   `base_packages=installed:N | nothing-missing | nothing-installable |
   planned | list-missing`.
+  - On a machine provisioned *before* this sweep existed, Omarchy's theme setup
+    has already written some of these files unowned
+    (`yaru-icon-theme` vs `/usr/share/icons/Yaru/scalable/actions/go-next
+    -symbolic.svg` and `go-previous-symbolic.svg`, observed on the lab), so
+    pacman aborts with "exists in filesystem". The step then retries once with
+    `--overwrite` limited to exactly the paths pacman named — what a first
+    install would have done — and fails loudly if the retry does not name any.
 - `tests/fixtures/cachyos-limine-luks`: carries a `install/omarchy-base.packages`
   (three names) and expects `base_packages=planned`.
 
