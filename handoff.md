@@ -201,6 +201,24 @@ systemd initramfs).
   pre-allowance is still what makes the post-reboot firewall survive ssh), the
   snapper assertion being vacuous without a pre-install backup, and the drift
   baseline's reach.
+- **Profile migration hardened** (2026-09-11, plan 044). The import was validated
+  against the real luna bundle in a lab guest and the run exposed a blocking
+  bug: `omocachy-profile-import.sh` aborted under `set -e`/`pipefail` when
+  `/run/user/$UID/hypr` did not exist — exactly the station case of importing
+  over ssh before logging in — so `packages`/`mise`/`services`/`verify` never
+  ran. Fixed, together with the six package failures the run surfaced:
+  `jack2` vs `pipewire-jack` and `mise-bin` vs `mise` became provider/installed
+  conflict rules (the latter had demoted the 163-package batch into 163 serial
+  transactions), `chaotic-*` is now skipped by the source repo the export
+  records per package, a stale DB gets a refresh-and-retry, the Yaru file
+  conflict gets the same one-shot `--overwrite` retry the wrapper uses, and a
+  partial package stage now FAILS the run instead of printing `PARTIAL` and
+  exiting 0. Proven in the guest with a freshly exported bundle: one
+  uninterrupted run, every stage executed, doctor `0 failed` with the three
+  remaining packages as *printed policy skips*, and its hypr/IPC checks
+  correctly reported as SKIP (no live session), not as passes.
+  `tests/run.sh` gained a `packages` section (31 assertions) and a `probe`
+  section; the suite is now 303 passed / 0 failed.
 - **`bin/debloat-quattro.sh`, driven interactively** (2026-09-11, the Omarchy 4
   guest): the picker ran on the desktop — one package removed through
   `omarchy-pkg-drop` (pacman transaction + snapper snapshots), one web app
