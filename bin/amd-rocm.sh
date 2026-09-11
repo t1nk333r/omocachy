@@ -29,9 +29,17 @@ info "Found AMD GPU ID: $GPU_ID"
 # removal risks breaking hybrid AMD+NVIDIA systems, and chwd's amd profile
 # needs no removals (see plan 007).
 
-# 3. Install AMD driver profile via chwd
-info "Installing AMD AMDGPU driver profile..."
-run_root chwd -i amd
+# 3. Install the AMD driver profile with CachyOS's hardware detection, when it
+# is present: chwd is CachyOS-only, and this script also runs standalone (see
+# README §5). Skipping the step elsewhere leaves the driver to that
+# distribution's own tooling — the same detect-and-respect stance as the
+# NVIDIA branch — instead of aborting after the detection succeeded.
+if have chwd; then
+    info "Installing AMD AMDGPU driver profile..."
+    run_root chwd -i amd
+else
+    warn "chwd (CachyOS's hardware detection) is not installed; skipping the AMDGPU driver-profile step. Install your distribution's AMDGPU/ROCm packages by hand if needed."
+fi
 
 # 4. Install ROCm runtime + VA-API utils
 info "Installing ROCm and VA-API packages..."

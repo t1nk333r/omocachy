@@ -82,6 +82,8 @@ lines in this header were corrected at the same time (see the branch note).
 
 | 035 | Deduplicate the GPU scripts' boilerplate into `bin/lib/common.sh` (`parse_dry_run_flag`, `write_gpu_session_env`) | P3 | S | — | DONE (this commit; byte-identical output for all three scripts, lint + 245 tests green) |
 
+| 036 | `amd-rocm.sh`: skip the CachyOS-only `chwd` step with a warning instead of aborting (both branches pinned in the `gpu` section) | P2 | S | — | DONE (this commit; 250 tests green, lint clean; the real-device run of release gate 3 follows the operator's sudo) |
+
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale)
 

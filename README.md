@@ -468,8 +468,10 @@ The installer uses the same vendor dispatch (`bin/gpu-detect.sh` →
 - **NVIDIA**: detect and respect whatever NVIDIA driver CachyOS already has
   installed — no pinning or downgrading. Only if no driver is present is one
   installed via CachyOS's `chwd`, scoped to GPU device classes.
-- **AMD**: installs the AMDGPU driver profile via `chwd` plus the ROCm
-  runtime and VA-API packages (`bin/amd-rocm.sh`). VA-API only — Mesa
+- **AMD**: installs the AMDGPU driver profile via `chwd` where CachyOS's
+  hardware detection is available, plus the ROCm runtime and VA-API packages
+  (`bin/amd-rocm.sh`); elsewhere the profile step is skipped with a warning
+  and the distribution's own tooling is left to it. VA-API only — Mesa
   removed VDPAU support upstream.
 - **Session environment**: both vendor scripts write their variables to
   `~/.config/uwsm/env.d/50-omocachy-gpu` (uwsm sources `uwsm/env.d/*`), never

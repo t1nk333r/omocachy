@@ -449,6 +449,32 @@ run_gpu() {
         expect_contains "$s.sh: --bogus prints usage" "Usage: $s.sh [--dry-run]" "$(cat "$out")"
     done
 
+    # chwd is CachyOS-only: the driver-profile step must skip with a warning
+    # where it is absent, and still run where it exists. An exclusive PATH pins
+    # both branches on any host; only the detection pipeline is stubbed.
+    local shim="$d/chwdless" chwdshim="$d/withchwd" b
+    mkdir -p "$shim" "$chwdshim"
+    printf '#!/bin/sh\necho "0000:03:00.0 VGA compatible controller: Advanced Micro Devices, Inc. [AMD/ATI] Navi 31 [1002:744c]"\n' >"$shim/lspci"
+    chmod +x "$shim/lspci"
+    for b in bash dirname grep head sed; do ln -sf "$(command -v "$b")" "$shim/$b"; done
+    printf '#!/bin/sh\nexit 0\n' >"$chwdshim/chwd"; chmod +x "$chwdshim/chwd"
+
+    out="$d/chwdless.out"
+    PATH="$shim" bash "$REPO_DIR/bin/amd-rocm.sh" --dry-run >"$out" 2>&1
+    rc=$?
+    expect_eq "amd-rocm: a chwd-less host completes its dry run" "0" "$rc"
+    expect_contains "amd-rocm: chwd step skipped with a warning" \
+        "chwd (CachyOS's hardware detection) is not installed" "$(cat "$out")"
+    expect_eq "amd-rocm: no chwd command planned on a chwd-less host" "" \
+        "$(sed -n '/DRYRUN: sudo chwd/p' "$out")"
+
+    out="$d/chwd.out"
+    PATH="$chwdshim:$shim" bash "$REPO_DIR/bin/amd-rocm.sh" --dry-run >"$out" 2>&1
+    rc=$?
+    expect_eq "amd-rocm: a host with chwd completes its dry run" "0" "$rc"
+    expect_contains "amd-rocm: chwd profile step planned where chwd exists" \
+        "DRYRUN: sudo chwd -i amd" "$(cat "$out")"
+
     # The detector seam dispatches to the named vendor's script without
     # consulting lspci at all; that vendor then no-ops on this GPU-less host.
     for s in nvidia amd-rocm; do
