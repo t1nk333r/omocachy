@@ -154,6 +154,24 @@ systemd initramfs).
   themed Omarchy/Plymouth one (`run/shots/limine-luks-themed.png`, not the raw
   text prompt the regression produced), and `--verify-only` after that reboot is
   **19 PASS / 0 FAIL**.
+- **Fresh install from the pristine golden** (2026-09-11, new lab
+  `~/Work/t1nk33r-lab-cachy-omarchy`): the first install with every fix from
+  plans 037–042 present, on a brand-new disk from the ISO bootstrap (Limine, no
+  LUKS), `--autologin`. One run: `wrapper-exit=0`, **19 PASS / 0 FAIL**, and
+  after a reboot the desktop comes up logged in with a clean panel.
+  It exposed a *systematic* gap the earlier gates could not: the wrapper
+  installed Omarchy's engine plus a hand-maintained closure, not Omarchy's
+  stock application set — **104 of the 147** entries in
+  `/usr/share/omarchy/install/omarchy-base.packages` were missing, and the
+  panel reported it itself (`App failure: Command not found: "udiskie"`;
+  `foot`, `grim`, `fzf`, `bat`, `eza`, `evince` were absent too). Plan 043
+  makes the wrapper install that upstream list (provider-aware, skipping what
+  no repo provides, with a one-shot `--overwrite` retry for files an earlier
+  setup wrote unowned). After the fix: 0 unsatisfied entries.
+  The lab is for human testing: ssh on the container's loopback port 2225 and a
+  passwordless VNC console on 127.0.0.1:5905, which `~/Work/novnc/serve.sh`
+  serves to a browser on 127.0.0.1:6080 (no root needed; `websockify` is a
+  user-level uv tool).
 - **`bin/debloat-quattro.sh`, driven interactively** (2026-09-11, the Omarchy 4
   guest): the picker ran on the desktop — one package removed through
   `omarchy-pkg-drop` (pacman transaction + snapper snapshots), one web app
