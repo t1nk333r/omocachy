@@ -353,7 +353,7 @@ picker_section() { # OUT HEADER
 
 run_picker() {
     head_ "debloat picker"
-    local d="$WORK/picker" g="$WORK/picker-guards" out gout rc
+    local d="$WORK/picker" g="$WORK/picker-guards" b="$WORK/picker-own" out gout rc nstub bstub
     mkdir -p "$d/apps" "$d/bin"
     printf '[Desktop Entry]\nExec=omarchy-launch-webapp https://example.invalid\n' >"$d/apps/Example.desktop"
     printf '[Desktop Entry]\nExec=xdg-terminal-exec --app-id=TUI.devtools\n' >"$d/apps/Devtools.desktop"
@@ -450,6 +450,74 @@ STUB
         "$(sed -n '/DRYRUN: omarchy-.*-remove $/p' "$out")"
     expect_eq "picker: an empty category is not listed in the summary" "" \
         "$(sed -n '/^  Web apps: *$/p' "$out")"
+
+    # Every category submitted empty. Candidates exist in all four categories
+    # here, so the empty selections are the stub gum's empty answers, not an
+    # empty enumeration: the run has to stop at the script's own "Nothing
+    # selected." exit (bin/debloat-quattro.sh:410-415) and never reach the
+    # summary, the confirm prompt or a removal plan.
+    nstub="$WORK/picker-gum-nothing"
+    mkdir -p "$nstub"
+    cat >"$nstub/gum" <<'STUB'
+#!/bin/sh
+case "$1" in
+choose) printf '\n' ;;               # real gum prints one empty line when nothing is checked
+confirm) echo "REACHED-CONFIRM" ;;   # the run must exit before this ever runs
+*) : ;;
+esac
+exit 0
+STUB
+    chmod +x "$nstub/gum"
+    out="$WORK/picker/nothing.out"
+    PATH="$nstub:$PATH" DQ_APP_DIR="$d/apps" DQ_BIN_DIR="$d/bin" \
+    DQ_OMARCHY_SCRIPT="$d/upstream.sh" DQ_BINDINGS_FILE="$d/bindings.conf" \
+        bash "$REPO_DIR/bin/debloat-quattro.sh" --dry-run >"$out" 2>&1
+    rc=$?
+    expect_eq "picker: nothing selected exits 0" "0" "$rc"
+    expect_contains "picker: nothing selected is reported" "Nothing selected." "$(cat "$out")"
+    expect_eq "picker: nothing selected plans no removal" "" "$(sed -n '/^DRYRUN: /p' "$out")"
+    expect_eq "picker: nothing selected reaches no summary or confirm" "" \
+        "$(sed -n '/^Selected for removal:/p;/^REACHED-CONFIRM$/p' "$out")"
+
+    # The removal loop's ownership re-check (bin/debloat-quattro.sh:469-476):
+    # a path that stopped being Omarchy's own between the picker and the rm is
+    # never deleted. The stub gum answers the stub prompt with an executable
+    # cursor-agent the user wrote themselves — no mise marker, so not
+    # Omarchy's — beside the owned codex. The un-owned one must be skipped with
+    # the script's own message and never planned for rm -f, while the owned one
+    # still is.
+    bstub="$WORK/picker-gum-owned"
+    mkdir -p "$bstub" "$b/bin"
+    printf '#!/bin/sh\n' >"$b/bin/codex"
+    printf '#!/bin/sh\necho "my own build of cursor-agent"\n' >"$b/bin/cursor-agent"
+    chmod +x "$b/bin/codex" "$b/bin/cursor-agent"
+    cat >"$bstub/gum" <<'STUB'
+#!/bin/sh
+case "$1" in
+choose)
+    case "$*" in
+    *"Agent CLI stubs"*) printf 'codex\ncursor-agent\n' ;;
+    *) printf '\n' ;;
+    esac
+    ;;
+confirm) exit 0 ;;
+*) : ;;
+esac
+exit 0
+STUB
+    chmod +x "$bstub/gum"
+    out="$WORK/picker/own-guard.out"
+    PATH="$bstub:$PATH" DQ_APP_DIR="$d/apps" DQ_BIN_DIR="$b/bin" \
+    DQ_OMARCHY_SCRIPT="$d/upstream.sh" DQ_BINDINGS_FILE="$d/bindings.conf" \
+        bash "$REPO_DIR/bin/debloat-quattro.sh" --dry-run >"$out" 2>&1
+    rc=$?
+    expect_eq "picker guard: the un-owned stub run exits 0" "0" "$rc"
+    expect_contains "picker guard: the un-owned stub is reported the script's way" \
+        "Skipping cursor-agent: not the wrapper Omarchy installed." "$(cat "$out")"
+    expect_eq "picker guard: the un-owned stub is not planned for removal" "" \
+        "$(sed -n '/^DRYRUN: rm -f .*cursor-agent$/p' "$out")"
+    expect_contains "picker guard: the owned stub beside it is still planned" \
+        "DRYRUN: rm -f $b/bin/codex" "$(cat "$out")"
 }
 
 # ---------------------------------------------------------------------------
