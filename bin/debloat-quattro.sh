@@ -355,28 +355,28 @@ fi
 
 selected_pkgs=()
 if [[ "${#pkg_candidates[@]}" -gt 0 ]]; then
-    mapfile -t selected_pkgs < <(gum choose --no-limit --header "Packages" "${pkg_candidates[@]}")
+    mapfile -t selected_pkgs < <(gum choose --no-limit --header "Packages" "${pkg_candidates[@]}" | sed '/^$/d')
 else
     echo "No packages found — skipping."
 fi
 
 selected_webapps=()
 if [[ "${#webapp_candidates[@]}" -gt 0 ]]; then
-    mapfile -t selected_webapps < <(gum choose --no-limit --header "Web apps" "${webapp_candidates[@]}")
+    mapfile -t selected_webapps < <(gum choose --no-limit --header "Web apps" "${webapp_candidates[@]}" | sed '/^$/d')
 else
     echo "No web apps found — skipping."
 fi
 
 selected_tuis=()
 if [[ "${#tui_candidates[@]}" -gt 0 ]]; then
-    mapfile -t selected_tuis < <(gum choose --no-limit --header "TUIs" "${tui_candidates[@]}")
+    mapfile -t selected_tuis < <(gum choose --no-limit --header "TUIs" "${tui_candidates[@]}" | sed '/^$/d')
 else
     echo "No TUIs found — skipping."
 fi
 
 selected_stubs=()
 if [[ "${#stub_present[@]}" -gt 0 ]]; then
-    mapfile -t selected_stubs < <(gum choose --no-limit --header "Agent CLI stubs" "${stub_present[@]}")
+    mapfile -t selected_stubs < <(gum choose --no-limit --header "Agent CLI stubs" "${stub_present[@]}" | sed '/^$/d')
 else
     echo "No agent CLI stubs found — skipping."
 fi

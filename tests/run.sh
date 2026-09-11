@@ -411,6 +411,45 @@ run_picker() {
         bash "$REPO_DIR/bin/debloat-quattro.sh" --list >"$gout" 2>&1
     expect_eq "picker guard: the cursor-agent wrapper Omarchy wrote is offered" "  cursor-agent" \
         "$(picker_section "$gout" "Agent CLI stubs" | grep -x '  cursor-agent')"
+
+    # Empty categories: gum choose prints one empty line when nothing is
+    # checked, and that empty element used to reach the removal phase — the
+    # upstream remover was called with an empty name, errored, and (under
+    # set -e) the rest of the removals never ran. This drives the whole
+    # selection -> summary -> removal-plan flow with a stub gum that answers
+    # only the Packages prompt.
+    gstub="$WORK/picker-gumstub"
+    mkdir -p "$gstub"
+    cat >"$gstub/gum" <<'STUB'
+#!/bin/sh
+case "$1" in
+choose)
+    case "$*" in
+    *Packages*) echo bash ;;
+    *) printf '\n' ;;   # real gum prints one empty line when nothing is checked
+    esac
+    ;;
+confirm) exit 0 ;;
+*) : ;;
+esac
+exit 0
+STUB
+    chmod +x "$gstub/gum"
+    out="$WORK/picker/empty-cat.out"
+    PATH="$gstub:$PATH" DQ_APP_DIR="$d/apps" DQ_BIN_DIR="$d/bin" \
+    DQ_OMARCHY_SCRIPT="$d/upstream.sh" DQ_BINDINGS_FILE="$d/bindings.conf" \
+        bash "$REPO_DIR/bin/debloat-quattro.sh" --dry-run >"$out" 2>&1
+    rc=$?
+    expect_eq "picker: an empty category does not stop the run" "0" "$rc"
+    expect_contains "picker: the selected package is planned" \
+        "DRYRUN: omarchy-pkg-drop bash" "$(cat "$out")"
+    # Any `…-remove` planned with an empty name is the bug: pre-fix, the empty
+    # element from an unchecked category reaches the removal phase and the
+    # summary lists the category with nothing after the colon.
+    expect_eq "picker: no empty-name removal is planned" "" \
+        "$(sed -n '/DRYRUN: omarchy-.*-remove $/p' "$out")"
+    expect_eq "picker: an empty category is not listed in the summary" "" \
+        "$(sed -n '/^  Web apps: *$/p' "$out")"
 }
 
 # ---------------------------------------------------------------------------
