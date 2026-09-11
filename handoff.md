@@ -1,7 +1,7 @@
 # Handoff — omocachy
 
 Orientation for whoever (human or agent) picks this project up next.
-Updated 2026-09-06. User-facing docs live in
+Updated 2026-09-11. User-facing docs live in
 `README.md`; the full engineering record lives in `plans/` — this file is
 the map between them.
 
@@ -10,15 +10,16 @@ the map between them.
 A standalone project (fork of `mroboff/omarchy-on-cachyos`, **not**
 PR-bound — clone URLs point at `d7eeem/omocachy`; `FUNDING.yml` deliberately still
 credits the original author). It installs Omarchy 4 on CachyOS with a
-per-item debloater:
+per-item debloater, and carries an existing Omarchy desktop profile onto the
+new machine:
 
 | Component | Script | State |
 |---|---|---|
-| Omarchy 4 "Quattro" package wrapper | `bin/install-omarchy-quattro.sh` | Reconciled against installed 4.0.2 (plan 015); **ran end to end on a real CachyOS 260809 minimal/Limine guest, rebooted into Omarchy** (plan 016). LUKS, GRUB, real GPUs still open |
+| Omarchy 4 "Quattro" package wrapper | `bin/install-omarchy-quattro.sh` | Reconciled against installed 4.0.2 (plan 015), backed by a fixture matrix (`tests/run.sh`, plan 016) and **run end to end on real CachyOS guests: Limine, Limine+LUKS2 (root converted in place) and GRUB** (plans 016/017); systemd-boot is fixture-only |
 | v4 per-item debloat picker | `bin/debloat-quattro.sh` | Built, mock-verified, needs real-v4 TUI run |
-| Profile migration (export → import → doctor) | `bin/omocachy-profile-export.sh`, `bin/omocachy-profile-import.sh`, `bin/omocachy-doctor.sh` | Plan 016. Exercised end-to-end for real in the lab VM (export, import onto a pristine guest, screenshot, `./lab test` green, rollback, re-import). `packages`/`mise` stages verified only in classification/offline paths |
-| Shared helpers | `bin/lib/common.sh`, `bin/lib/profile.sh`, `share/profile-paths.conf` | `common.sh` is the installer's own dry-run contract, extracted verbatim (dry-run output byte-identical); `profile.sh` owns bundle schema 1 and the exclude/secret/package policies |
-| GPU dispatch | `bin/gpu-detect.sh` → `gpu-setup.sh` → `nvidia.sh`/`amd-rocm.sh` | Working; NVIDIA regex covers 580xx/470xx and now reports the GPU generation, installs `nvidia-vaapi-driver` and writes a `modeset=1` drop-in when nothing else does; AMD is VA-API-only; session env goes to `~/.config/uwsm/env.d/50-omocachy-gpu`, never `~/.config/uwsm/env`; both accept `--dry-run` |
+| Profile migration (export → import → doctor) | `bin/omocachy-profile-export.sh`, `bin/omocachy-profile-import.sh`, `bin/omocachy-doctor.sh` | Plan 018. Exercised end to end for real in the Omarchy lab VM (export, import onto a pristine guest, screenshot of the migrated desktop, `./lab test` green, rollback, re-import); the `packages` and `mise` stages ran online against a real CachyOS guest |
+| Shared helpers | `bin/lib/common.sh`, `bin/lib/profile.sh`, `share/profile-paths.conf` | `common.sh` is the dry-run contract shared by the profile scripts; `profile.sh` owns bundle schema 1 and the exclude/secret/package policies |
+| GPU dispatch | `bin/gpu-detect.sh` → `gpu-setup.sh` → `nvidia.sh`/`amd-rocm.sh` | Working; NVIDIA probes the PCI id for the generation and warns on the one broken combination (open module, pre-Turing), installs `nvidia-vaapi-driver`, and writes a `modeset=1` drop-in only when nothing else sets one; AMD is VA-API-only; session env goes to `~/.config/uwsm/env.d/50-omocachy-gpu`, never `~/.config/uwsm/env`; all honour `--dry-run` |
 
 ## Version policy
 
@@ -56,6 +57,13 @@ maintenance isolated there and do not reintroduce those scripts to `main`.
    override of `90-mkinitcpio-install.hook` (which is the *only* active
    mkinitcpio install hook once limine-mkinitcpio-hook is present, so it
    switched off initramfs rebuilds). All replaced; see the plan for evidence.
+5. 2026-09-07/08: the first real CachyOS guests — Limine, then GRUB, then
+   the Limine guest with its root converted to LUKS2 in place (`./lab
+   rescue`, `cryptsetup reencrypt`, `sd-encrypt` + `rd.luks.uuid=`) —
+   produced the plan-017 corrections, the LUKS boot evidence and the profile
+   migration (plan 018). 2026-09-11: the two parallel work lines
+   (wrapper/tests on `main`, profile/LUKS on `omocachy`) were consolidated
+   into one branch.
 
 ## Working conventions (keep these)
 
@@ -67,10 +75,11 @@ maintenance isolated there and do not reintroduce those scripts to `main`.
   against (drift-check first). Executors run in isolated git worktrees; the
   reviewer re-runs done criteria, reads the whole diff, then fast-forwards
   main. Never merge a worktree branch while your shell's cwd is inside it.
-- **Lint gate**: `bash -n bin/*.sh bin/lib/*.sh` plus `shellcheck
-  --severity=warning -x bin/*.sh bin/lib/*.sh` (`-x` so the sourced
-  `bin/lib/` helpers are followed; shellcheck 0.11 locally; in CI via the
-  `Jenkinsfile`). Run it before every push.
+- **Lint gate**: `bash -n bin/*.sh bin/lib/*.sh tests/run.sh` plus
+  `shellcheck --severity=warning -x bin/*.sh bin/lib/*.sh tests/run.sh`
+  (`-x` so the sourced `bin/lib/` helpers are followed; shellcheck 0.11
+  locally, CI at `--severity=error` via the `Jenkinsfile`). Run it before
+  every push, and `tests/run.sh` before and after touching the wrapper.
 - Every state-changing script offers `--dry-run`; privileged ops flow
   through `run`/`run_root`-style helpers so dry-run is enforceable by grep.
 
@@ -93,44 +102,65 @@ root-equivalent; secrets in `.env`, unrecoverable, never commit or print):
 
 ## Where validation stands
 
-Plan 016 (2026-09-07) closed the two big gates on a real CachyOS guest —
-`~/Work/t1nk33r-lab-cachy` (branch `cachyos-guest`, `LAB_DISTRO=cachyos`,
-CachyOS 260809 minimal/Limine/btrfs+snapper/no LUKS): the Quattro wrapper
-ran end to end (10/10 assertions), the guest rebooted through the
-transformed HOOKS into Omarchy's SDDM greeter with `ID=cachyos` intact, and
-the profile import ran online (packages + mise for real) with a screenshot
-of the migrated Quickshell bar. Two real-host bugs were found and fixed on
-the way: apply-system needs `omarchy-base.packages` installed first, and
-the user seeding needs Omarchy's `env-bootstrap` sourced (`OMARCHY_PATH`).
-Details and evidence: the plan file.
+Validation happens in `~/Work/t1nk33r-lab-cachy` (branch `cachyos-guest`,
+`LAB_DISTRO=cachyos`, CachyOS 260809 minimal, Limine, btrfs + snapper,
+systemd initramfs).
+
+- **Limine, no LUKS** (2026-09-07): the wrapper ran end to end on the guest,
+  which rebooted through the transformed HOOKS into Omarchy's SDDM greeter
+  with `ID=cachyos` intact; the profile import ran online (packages + mise
+  for real) with a screenshot of the migrated Quickshell bar.
+- **Limine + LUKS2** (2026-09-08): the same guest's root was converted in
+  place from the live ISO (`./lab rescue`, `cryptsetup reencrypt`,
+  `sd-encrypt` + `rd.luks.uuid=`). The wrapper's transformed HOOKS unlocked
+  it on first boot; a re-apply reported `LUKS detected`, passed every
+  assertion and rebooted into the greeter. The conversion also exposed a
+  keyserver abort, now fixed (idempotent key import + fallback keyservers).
+- **GRUB** (2026-09-07, non-Limine path): `--verify-only` after reboot
+  reported 18 PASS, 0 FAIL; bootloader detection was exercised with the ESP
+  unreadable and never mistook the `limine` package for the bootloader.
+- **Fixture matrix** (`tests/run.sh`): the HOOKS merge for both initramfs
+  flavours and its refusal path, a dry run against four sysroot fixtures,
+  and a dry-run purity check with failing command stubs.
+- **systemd-boot** and **real GPUs**: fixtures / dry-run only (the guest has
+  no GPU). The dev machine (AMD) can exercise `amd-rocm.sh` for real.
 
 ## Release gates (the honest "not done" list)
 
-1. **GRUB / systemd-boot CachyOS installs** — the non-Limine hook
-   overrides are still dry-run/harness only. (LUKS+Limine is done: the
-   guest's root was converted in place with `./lab rescue`, the wrapper
-   re-applied 10/10 and it boots through `rd.luks.uuid=`; plan 016.)
-2. **Real GPUs** — the VM has none; `nvidia.sh`/`amd-rocm.sh` were only
-   dry-run. The dev machine (AMD) can exercise `amd-rocm.sh` for real.
-3. **`omarchy-settings` upgrade through the preserve hook** — the hook is
-   installed and the first-install restore verified; an actual upgrade
-   transaction has not fired it yet.
-4. **Real interactive run of `bin/debloat-quattro.sh`** on the CachyOS guest
-   — enumeration/dry-run are mock-verified only.
-5. **Jenkins agent secret** (above) — then confirm a green build on push.
-6. Backlog: opt-in debloat prompt inside the wrapper; harden the lab's
-   CachyOS driver (fixed 90 s wait, typed launch line) and merge
-   `cachyos-guest` into the main lab checkout.
+1. **The plan-017 fixes have not been re-run on a guest** — they landed after
+   the last real run (2026-09-07). The next real CachyOS run re-tests the ISO
+   package closure, the ufw ssh allowance and the `/etc/environment`
+   `OMARCHY_PATH` write together. Still fixture-only: a non-Limine `HookDir`
+   override inside a live pacman transaction, an initramfs rebuild on a
+   kernel upgrade, `limine-snapper-sync` accepting `TARGET_OS_NAME="CachyOS"`,
+   and a `--skip-user-configs` run on a fresh guest.
+2. **systemd-boot CachyOS install** — fixtures only; GRUB and Limine (with
+   and without LUKS2) have run for real.
+3. **Real GPUs** — `nvidia.sh`/`amd-rocm.sh` are dry-run only; the dev
+   machine (AMD) can run `amd-rocm.sh` for real.
+4. **`omarchy-settings` upgrade through the preserve hook** — installed and
+   the first-install restore verified; no upgrade transaction has fired the
+   hook yet.
+5. **Real interactive run of `bin/debloat-quattro.sh`** on the CachyOS
+   guest — enumeration/dry-run are mock-verified only.
+6. **Jenkins agent secret** (above) — then confirm a green build on push.
+7. Backlog: opt-in debloat prompt inside the wrapper;
+   `--restore-host-specific`; lab hardening (fixed 90 s wait, typed launch
+   line) and merging the lab's `cachyos-guest` branch.
 
 ## Fast orientation for an agent
 
 Read in this order: this file → `plans/README.md` (status + discoveries
-index) → the specific plan file for whatever you're touching (016 = profile
-migration: bundle format, secret/package policy, the adopt/reject table for
-the two candidate repositories; 015 = current wrapper behaviour with 4.0.2
-evidence, 012 = original wrapper design, 011 = v4 strategy evidence,
-007/008 = GPU evidence trail). Trust the plan files'
-quoted evidence over memory; the best upstream source is an *installed*
-Omarchy (`pacman -Ql omarchy omarchy-settings`, `/usr/share/omarchy/**`,
-`/var/lib/pacman/local/*/install`); re-probe `basecamp/omarchy` via git
-otherwise — it moves fast and the CDN lies.
+index) → the specific plan file for whatever you're touching (016 = current
+wrapper behaviour, the audit of 015 and the test seam; 017 = the corrections
+from the first real CachyOS run; 018 = profile migration — bundle format,
+secret/package policy, the adopt/reject table for the two candidate
+repositories; 015 = the 4.0.2 evidence trail, with two mechanisms since
+corrected by 016; 012 = original wrapper design; 011 = v4 strategy
+evidence; 007/008 = GPU evidence trail).
+Before changing `bin/install-omarchy-quattro.sh`, run `tests/run.sh` and
+re-run it after: the fixture matrix is what catches a branch flipping.
+Trust the plan files' quoted evidence over memory; the best upstream source
+is an *installed* Omarchy (`pacman -Ql omarchy omarchy-settings`,
+`/usr/share/omarchy/**`, `/var/lib/pacman/local/*/install`); re-probe
+`basecamp/omarchy` via git otherwise — it moves fast and the CDN lies.

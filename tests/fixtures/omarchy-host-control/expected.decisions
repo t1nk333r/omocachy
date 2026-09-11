@@ -1,0 +1,20 @@
+# Control: the owner's own Omarchy 4.0.2 host (real /etc/mkinitcpio.conf and
+# conf.d files, sanitised cmdline). A regression on this machine shows up as
+# a diff here. It is a re-apply, is not CachyOS, and boots Limine with the
+# udev/encrypt flavour.
+exit=0
+is_cachyos=false
+reapply=true
+bootloader=limine
+luks=true
+cmdline_crypt=udev
+captured_flavour=udev
+captured_hooks=base udev plymouth keyboard autodetect microcode modconf kms keymap consolefont block encrypt filesystems fsck btrfs-overlayfs resume
+merged_hooks=base udev plymouth keyboard autodetect microcode modconf kms keymap consolefont block encrypt resume filesystems fsck btrfs-overlayfs
+initramfs_rebuild=limine-mkinitcpio
+boot_hook_policy=limine-native
+refresh_limine=yes-restore-cachyos-conf
+limine_default_block=ENABLE_UKI=no;BOOT_ORDER="*, *fallback, Snapshots";
+skel_hypr_files=true
+limine_cmdline_style=unset
+omarchy_path_env=written

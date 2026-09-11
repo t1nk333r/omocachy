@@ -1,0 +1,1 @@
+-- Omarchy skel hyprland entry point

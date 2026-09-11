@@ -1,4 +1,4 @@
-# 016 — Carry an existing Omarchy profile onto CachyOS (export / import / doctor)
+# 018 — Carry an existing Omarchy profile onto CachyOS (export / import / doctor)
 
 Written and executed 2026-09-07 against `643bb57`. Branch: `omocachy-profile`,
 merged into `omocachy`.

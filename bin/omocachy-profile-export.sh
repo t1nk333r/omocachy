@@ -11,7 +11,7 @@ set -euo pipefail
 # bin/omocachy-profile-import.sh on the CachyOS machine you are moving to
 # (after bin/install-omarchy-quattro.sh has put Omarchy 4 there).
 #
-# Design and evidence: plans/016-omarchy-profile-migration.md.
+# Design and evidence: plans/018-omarchy-profile-migration.md.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"

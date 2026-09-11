@@ -11,7 +11,7 @@ pipeline {
       steps {
         sh '''
           set -e
-          for f in bin/*.sh bin/lib/*.sh; do
+          for f in bin/*.sh bin/lib/*.sh tests/run.sh; do
             bash -n "$f"
             echo "OK: $f"
           done
@@ -22,7 +22,15 @@ pipeline {
     stage('ShellCheck') {
       steps {
         // -x so shellcheck follows the sourced bin/lib/*.sh helpers.
-        sh 'shellcheck --severity=error -x bin/*.sh bin/lib/*.sh'
+        sh 'shellcheck --severity=error -x bin/*.sh bin/lib/*.sh tests/run.sh'
+      }
+    }
+
+    // Fixture matrix + HOOKS merge + dry-run purity. Read-only: it runs the
+    // installer only under --dry-run against tests/fixtures/* sysroots.
+    stage('Test suite') {
+      steps {
+        sh 'tests/run.sh'
       }
     }
   }

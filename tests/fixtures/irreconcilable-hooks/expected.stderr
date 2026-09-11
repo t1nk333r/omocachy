@@ -1,0 +1,2 @@
+Error: cannot reconcile the mkinitcpio HOOKS on this machine.
+Fix /etc/mkinitcpio.conf

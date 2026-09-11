@@ -1,0 +1,16 @@
+# CachyOS + systemd-boot + LUKS (rd.luks.name=), with the `limine` package
+# installed anyway: the tautological-detection trap. Detection must answer
+# systemd-boot from the ESP, never limine from the package list.
+exit=0
+is_cachyos=true
+bootloader=systemd-boot
+luks=true
+cmdline_crypt=systemd
+captured_flavour=systemd
+merged_hooks=base systemd plymouth keyboard autodetect microcode modconf kms sd-vconsole block sd-encrypt filesystems fsck sd-btrfs-overlayfs
+initramfs_rebuild=/usr/bin/mkinitcpio -P
+boot_hook_policy=hookdir-override
+refresh_limine=skipped-not-limine
+limine_default_block=not-limine
+ufw_ssh=no-sshd
+omarchy_path_env=written

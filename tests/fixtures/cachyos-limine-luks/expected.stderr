@@ -1,0 +1,5 @@
+Allowing ssh now,
+DRYRUN: sudo ufw allow 22/tcp
+DRYRUN: sudo ufw allow 2222/tcp
+assigns KERNEL_CMDLINE with '='
+OMARCHY_PATH=/usr/share/omarchy

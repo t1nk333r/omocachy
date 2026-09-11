@@ -1,0 +1,2 @@
+# lab: assigns with = , which drops omarchy-settings' += cmdline additions
+KERNEL_CMDLINE[default]="root=/dev/mapper/root rw quiet"
