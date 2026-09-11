@@ -1929,6 +1929,30 @@ if [[ $BOOTLOADER != "limine" ]]; then
     else
         decide limine_artifacts "none"
     fi
+else
+    # Secure Boot on a Limine host: the user-config seeding above ends in
+    # omarchy-refresh-limine → limine-update → limine-install, whose
+    # fallback-loader update copies the UNSIGNED packaged
+    # /usr/share/limine/BOOTX64.EFI over /boot/EFI/BOOT/BOOTX64.EFI (that path
+    # signs only /boot/EFI/limine/limine_x64.efi, and sbctl's Path-triggered
+    # pacman hook cannot fire because this copy is not a pacman transaction).
+    # Verified on the Secure Boot lab guest 2026-09-11: the firmware entry keeps
+    # booting because it loads the signed limine_x64.efi, but the removable-media
+    # fallback would be refused by Secure Boot. Re-sign it here, and only when
+    # the machine really has Secure Boot enforcing — sbctl signing is idempotent,
+    # and without sbctl or keys there is nothing to sign with.
+    if command -v sbctl >/dev/null 2>&1 &&
+        sbctl status 2>/dev/null | grep -qiE 'secure boot:?[[:space:]]*enabled'; then
+        if $DRY_RUN; then
+            echo "DRYRUN: sbctl sign /boot/EFI/BOOT/BOOTX64.EFI (Secure Boot is on; limine-install leaves the fallback loader unsigned)"
+            decide secure_boot_fallback "would-sign"
+        else
+            run_root sbctl sign /boot/EFI/BOOT/BOOTX64.EFI
+            decide secure_boot_fallback "signed"
+        fi
+    else
+        decide secure_boot_fallback "not-applicable"
+    fi
 fi
 apply_boot_hook_policy
 
