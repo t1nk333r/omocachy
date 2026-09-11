@@ -245,7 +245,7 @@ SECRET_HITS=$(wc -l <"$SECRETS_REMOVED" | tr -d ' ')
 INLINE_SECRETS="$WORK/inline-secrets.txt"
 : >"$INLINE_SECRETS"
 if ! $DRY_RUN; then
-    grep -rlIE "$PROFILE_SECRET_CONTENT_RE" "$BUNDLE/home" 2>/dev/null |
+    grep -rliE "$PROFILE_SECRET_CONTENT_RE" "$BUNDLE/home" 2>/dev/null |
         sed "s|^$BUNDLE/home/||" | sort >"$INLINE_SECRETS" || true
 fi
 INLINE_HITS=$(wc -l <"$INLINE_SECRETS" | tr -d ' ')

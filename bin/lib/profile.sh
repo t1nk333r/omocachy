@@ -100,12 +100,15 @@ PROFILE_SECRET_FILE_GLOBS=(
     '*.asc'
     'known_hosts'
     'authorized_keys'
+    '.pgpass'
+    '*.keystore'
+    'fish_variables'
 )
 
 # Text that suggests a captured config carries a credential inline. Used for
 # a warning only — these files (shell.json above all: plugin service URLs and
 # API keys live there) are part of the desktop profile and must travel.
-PROFILE_SECRET_CONTENT_RE='(api[_-]?key|apikey|access[_-]?token|bearer |client[_-]?secret|password)['"'"'"]?\s*[:=]'
+PROFILE_SECRET_CONTENT_RE='(api[_-]?key|apikey|access[_-]?token|refresh[_-]?token|auth[_-]?token|secret[_-]?access[_-]?key|bearer|client[_-]?secret|secret[_-]?key|private[_-]?key|password|passwd|token)['"'"'"]?[[:space:]]*[:=]'
 
 # --- packages the importer never installs ---------------------------------
 # "ERE::reason". The bundle lists them anyway (the report names every skip),

@@ -321,6 +321,26 @@ run_units() {
     else
         bad "check_snapper: compares an on-disk backup or reports it cannot verify" "$out"
     fi
+
+    # 7. The inline-credential content sweep (plan 026). SUMMARY.md's "files
+    # with inline credentials" count is the operator's only signal about a
+    # bundle, so the pattern has to see the shapes real configs use -- apiKey
+    # in shell.json above all. The old alternation was lowercase-only and the
+    # consumer case-sensitive, so `apiKey`, `API_KEY` and every `*_TOKEN`
+    # spelling reported 0. The sweep is warn-only and lists the matching
+    # paths, so a broader pattern is visible rather than silent.
+    local shape
+    for shape in 'apiKey = "x"' 'API_KEY: y' 'GITHUB_TOKEN=z' \
+        'AWS_SECRET_ACCESS_KEY=w' 'access_token: t' 'password: p'; do
+        got="$( (source "$REPO_DIR/bin/lib/profile.sh"
+            printf '%s\n' "$shape" | grep -qiE "$PROFILE_SECRET_CONTENT_RE") && echo matched || echo missed)"
+        expect_eq "PROFILE_SECRET_CONTENT_RE matches: $shape" "matched" "$got"
+    done
+    for shape in 'keyboard = us' 'monitor = DP-1'; do
+        got="$( (source "$REPO_DIR/bin/lib/profile.sh"
+            printf '%s\n' "$shape" | grep -qiE "$PROFILE_SECRET_CONTENT_RE") && echo matched || echo clean)"
+        expect_eq "PROFILE_SECRET_CONTENT_RE ignores: $shape" "clean" "$got"
+    done
 }
 
 # ---------------------------------------------------------------------------
