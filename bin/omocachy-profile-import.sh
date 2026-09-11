@@ -166,13 +166,6 @@ echo ""
 
 confirm "Restore into $HOME?" || die "aborted."
 
-if ! $DRY_RUN; then
-    mkdir -p "$BACKUP_DIR" "$REPORT_DIR"
-    # From here on every line also lands in the report directory, so a
-    # migration that fails halfway leaves a transcript next to its lists.
-    start_logging "$REPORT_DIR/import.log"
-fi
-
 STAGE_RESULT=()
 record_stage() { STAGE_RESULT+=("$1: $2"); }
 
@@ -189,20 +182,25 @@ stage_configs() {
         return 0
     }
 
-    : >"$WORK/restored.tsv"
     for rel in "${CAPTURED[@]}"; do
         [[ -e "$BUNDLE/home/$rel" ]] || continue
-        if [[ -e "$HOME/$rel" ]]; then
+        # A dangling symlink is not [[ -e ]], but it is still something the
+        # bundle shadows: classify it as pre-existing so the backup holds the
+        # link and the undo puts it back, instead of an rm -rf with nothing to
+        # restore.
+        if [[ -e "$HOME/$rel" || -L "$HOME/$rel" ]]; then
             if $DRY_RUN; then
                 echo "DRYRUN: back up $HOME/$rel -> $BACKUP_DIR/$rel"
             else
                 mkdir -p "$BACKUP_DIR/$(dirname "$rel")"
                 cp -a "$HOME/$rel" "$BACKUP_DIR/$rel"
+                printf '%s\texisted\n' "$rel" >>"$BACKUP_DIR/restored.tsv"
             fi
-            printf '%s\texisted\n' "$rel" >>"$WORK/restored.tsv"
             backed=$((backed + 1))
         else
-            printf '%s\tnew\n' "$rel" >>"$WORK/restored.tsv"
+            if ! $DRY_RUN; then
+                printf '%s\tnew\n' "$rel" >>"$BACKUP_DIR/restored.tsv"
+            fi
             fresh=$((fresh + 1))
         fi
 
@@ -238,8 +236,7 @@ stage_configs() {
     done
 
     if ! $DRY_RUN; then
-        cp -a "$WORK/restored.tsv" "$REPORT_DIR/restored.tsv"
-        write_rollback
+        cp -a "$BACKUP_DIR/restored.tsv" "$REPORT_DIR/restored.tsv"
         echo "    backed up $backed existing paths, added $fresh new ones"
         echo "    rollback: $BACKUP_DIR/rollback.sh"
         # tar replaces files by unlink+create; a live Hyprland watching
@@ -258,9 +255,11 @@ stage_configs() {
 }
 
 # A generated undo for exactly the paths this run touched: restore the ones
-# that existed, remove the ones it introduced. Nothing else is in scope.
+# that existed, remove the ones it introduced. Nothing else is in scope. It
+# replays $BACKUP_DIR/restored.tsv at run time rather than carrying a copy of
+# the list, so it stays honest if the merge dies halfway — which is also why
+# it is generated before the first path is merged, not after the last.
 write_rollback() {
-    local rel state
     # Defence in depth inside the generated script: the list it replays comes
     # from a manifest this run already validated, but restored.tsv is a plain
     # file sitting next to the backup, and a hand-edited or truncated one must
@@ -294,14 +293,12 @@ write_rollback() {
         echo '    if $DRY; then echo "would remove $HOME_DIR/$1"; return; fi'
         echo '    rm -rf "$HOME_DIR/$1"'
         echo '}'
-        while IFS=$'\t' read -r rel state; do
-            [[ -z $rel ]] && continue
-            if [[ $state == existed ]]; then
-                printf 'restore %q\n' "$rel"
-            else
-                printf 'drop %q\n' "$rel"
-            fi
-        done <"$WORK/restored.tsv"
+        cat <<'ROLLBACK'
+while IFS=$'\t' read -r rel state; do
+    [[ -n $rel ]] || continue
+    if [[ $state == existed ]]; then restore "$rel"; else drop "$rel"; fi
+done <"$BACKUP/restored.tsv"
+ROLLBACK
         echo 'echo "rollback complete"'
     } >"$BACKUP_DIR/rollback.sh"
     chmod 755 "$BACKUP_DIR/rollback.sh"
@@ -485,6 +482,25 @@ stage_verify() {
         record_stage verify FAILED
     fi
 }
+
+# Everything a half-finished run needs to be undone or explained exists before
+# the first stage runs. In particular the undo is written here, before a single
+# path is merged: the "restoring $rel failed … rollback: …" message must not
+# point at a file the operator does not have, and the list the undo replays
+# must not be the temp dir's copy. The functions above are definitions only,
+# so nothing between the prompt and this point needs the directories.
+if ! $DRY_RUN; then
+    mkdir -p "$BACKUP_DIR" "$REPORT_DIR"
+    # The undo reads $BACKUP_DIR/restored.tsv at run time, so the list has to
+    # exist from the moment the undo does — a run that never reaches the
+    # configs stage (--only packages, or a bundle without a home/ payload)
+    # still gets an empty one to replay.
+    : >"$BACKUP_DIR/restored.tsv"
+    write_rollback
+    # From here on every line also lands in the report directory, so a
+    # migration that fails halfway leaves a transcript next to its lists.
+    start_logging "$REPORT_DIR/import.log"
+fi
 
 for stage in "${ALL_STAGES[@]}"; do
     if stage_enabled "$stage"; then

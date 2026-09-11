@@ -8,6 +8,7 @@
 #   tests/run.sh picker       the debloat picker's enumeration (--list)
 #   tests/run.sh gpu          GPU vendor dispatch, lspci stubbed
 #   tests/run.sh guard        the bundle trust boundary (manifest, digest, members)
+#   tests/run.sh rollback     the generated undo (written before the merge)
 #   tests/run.sh matrix       the dry run against each tests/fixtures/* sysroot
 #   tests/run.sh purity       the dry-run contract (no state-changing binary runs)
 #
@@ -520,17 +521,104 @@ run_guard() {
         "https://example.invalid/thing.git" "$row"
 }
 
+# ---------------------------------------------------------------------------
+# The generated undo. It is written before the first path is merged, so a
+# merge that dies halfway still leaves the operator the file the failure
+# message points at, and it reads the touched paths from beside itself at run
+# time, so the list survives the run that produced it. A dangling symlink
+# under $HOME counts as pre-existing: [[ -e ]] is false for one, which used to
+# classify it "new" — the undo then deleted it having never taken a backup.
+run_rollback() {
+    head_ "rollback integrity"
+    local d="$WORK/rollback/bundle" h dir out rc
+
+    mkdir -p "$d/home/.config/hypr" "$WORK/rollback/xdg"
+    printf 'from the bundle\n' >"$d/home/.config/hypr/hyprland.lua"
+    printf '{"schema":1,"source":{"host":"test","user":"me","home":"/home/me"},"payload":{"captured":[".config/hypr/hyprland.lua"]}}\n' >"$d/manifest.json"
+
+    # HYPRLAND_INSTANCE_SIGNATURE points at nothing on purpose: with it unset
+    # stage_configs adopts the newest live instance and reloads it, which from
+    # a test would mean reloading the operator's desktop.
+    _rollback_import() { # HOME
+        env HOME="$1" XDG_RUNTIME_DIR="$WORK/rollback/xdg" HYPRLAND_INSTANCE_SIGNATURE=none \
+            bash "$REPO_DIR/bin/omocachy-profile-import.sh" \
+            --bundle "$d" --only configs --yes 2>&1
+    }
+
+    # 1. Happy path, over a dangling symlink.
+    h="$WORK/rollback/home"
+    mkdir -p "$h/.config/hypr"
+    ln -s /nonexistent-omocachy-target "$h/.config/hypr/hyprland.lua"
+
+    out="$(_rollback_import "$h")"
+    rc=$?
+    expect_eq "rollback: the configs merge succeeds" "0" "$rc"
+    dir="$(echo "$h"/.local/state/omocachy/backups/import-*)"
+    expect_eq "rollback: the undo is executable after the merge" "yes" \
+        "$([[ -x $dir/rollback.sh ]] && echo yes)"
+    expect_eq "rollback: the touched-path list sits beside it" "yes" \
+        "$([[ -f $dir/restored.tsv ]] && echo yes)"
+    expect_contains "rollback: a dangling symlink counts as pre-existing" \
+        $'.config/hypr/hyprland.lua\texisted' "$(cat "$dir/restored.tsv" 2>/dev/null)"
+    expect_eq "rollback: the backup holds the link, not a copy of its target" "yes" \
+        "$([[ -L $dir/.config/hypr/hyprland.lua ]] && echo yes)"
+    expect_eq "rollback: the bundle's file is what the merge left in place" "from the bundle" \
+        "$(cat "$h/.config/hypr/hyprland.lua")"
+    expect_contains "rollback: --dry-run replays the list the merge appended to" \
+        "would restore $h/.config/hypr/hyprland.lua" "$("$dir/rollback.sh" --dry-run)"
+
+    # 2. The merge dies mid-run. The undo the message points at must already
+    # exist, and what was already touched must not die with the temp dir.
+    h="$WORK/rollback/failed-home"
+    mkdir -p "$h/.config/hypr" "$h/.local"
+    ln -s /nonexistent-omocachy-target "$h/.config/hypr/hyprland.lua"
+    chmod 500 "$h/.config/hypr"    # the backup reads it; the merge into it cannot
+
+    out="$(_rollback_import "$h")"
+    rc=$?
+    chmod 700 "$h/.config/hypr"
+    dir="$(echo "$h"/.local/state/omocachy/backups/import-*)"
+    expect_eq "rollback: an unwritable target fails the merge" "1" "$rc"
+    expect_contains "rollback: the failure message names the undo" \
+        "rollback: $dir/rollback.sh" "$out"
+    expect_eq "rollback: the undo exists although the merge died" "yes" \
+        "$([[ -x $dir/rollback.sh ]] && echo yes)"
+    expect_contains "rollback: the path already touched is still listed" \
+        $'.config/hypr/hyprland.lua\texisted' "$(cat "$dir/restored.tsv" 2>/dev/null)"
+    expect_contains "rollback: --dry-run still plans that restore" \
+        "would restore $h/.config/hypr/hyprland.lua" "$("$dir/rollback.sh" --dry-run)"
+
+    # 3. The list is a plain file beside the backup now that the undo reads it
+    # at run time, so a hand-edited ".." must not become an rm -rf outside
+    # $HOME. The canary sits in the parent directory the entry would reach.
+    h="$WORK/rollback/tamper/home"
+    mkdir -p "$h/.config/hypr"
+    ln -s /nonexistent-omocachy-target "$h/.config/hypr/hyprland.lua"
+    printf 'canary\n' >"$WORK/rollback/tamper/canary"
+
+    _rollback_import "$h" >"$WORK/rollback/tamper/import.out" 2>&1
+    dir="$(echo "$h"/.local/state/omocachy/backups/import-*)"
+    printf '..\texisted\n' >>"$dir/restored.tsv"
+    out="$("$dir/rollback.sh" 2>&1)"
+    rc=$?
+    expect_eq "rollback: a hand-edited '..' entry is refused" "1" "$rc"
+    expect_contains "rollback: the refusal names the entry" "refusing unsafe path .." "$out"
+    expect_eq "rollback: nothing outside the backup was removed" "canary" \
+        "$(cat "$WORK/rollback/tamper/canary" 2>/dev/null)"
+}
+
 case "${1:-all}" in
-    lint)   run_lint ;;
-    hooks)  run_hooks ;;
-    units)  run_units ;;
-    picker) run_picker ;;
-    gpu)    run_gpu ;;
-    guard)  run_guard ;;
-    matrix) run_matrix ;;
-    purity) run_purity ;;
-    all)    run_lint; run_hooks; run_units; run_picker; run_gpu; run_guard; run_matrix; run_purity ;;
-    *)      echo "Usage: $0 [lint|hooks|units|picker|gpu|guard|matrix|purity|all]" >&2; exit 2 ;;
+    lint)     run_lint ;;
+    hooks)    run_hooks ;;
+    units)    run_units ;;
+    picker)   run_picker ;;
+    gpu)      run_gpu ;;
+    guard)    run_guard ;;
+    rollback) run_rollback ;;
+    matrix)   run_matrix ;;
+    purity)   run_purity ;;
+    all)      run_lint; run_hooks; run_units; run_picker; run_gpu; run_guard; run_rollback; run_matrix; run_purity ;;
+    *)        echo "Usage: $0 [lint|hooks|units|picker|gpu|guard|rollback|matrix|purity|all]" >&2; exit 2 ;;
 esac
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
