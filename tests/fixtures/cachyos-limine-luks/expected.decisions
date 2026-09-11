@@ -23,3 +23,4 @@ iso_closure=cups avahi docker power-profiles-daemon kernel-modules-hook ufw ufw-
 ufw_ssh=allowed:22,2222
 omarchy_path_env=written
 limine_cmdline_style=assign-params-appended
+base_packages=planned

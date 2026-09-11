@@ -1418,6 +1418,57 @@ run_root env OMARCHY_ALLOW_DIRECT_PACMAN=1 pacman -Syu --needed --noconfirm \
 decide iso_closure "${OMARCHY_ISO_CLOSURE[*]}"
 
 # ---------------------------------------------------------------------------
+# Omarchy's base package list
+#
+# The omarchy package pulls the engine, not Omarchy's stock application set:
+# the ISO pacstraps /usr/share/omarchy/install/omarchy-base.packages (147
+# names — foot, grim, fzf, evince, udiskie, ...). Without this sweep a
+# provisioned machine boots the panel with its tools missing and says so:
+# "App failure: Command not found: \"udiskie\"" (observed on the first fresh
+# guest, 2026-09-11). Runs after the package step so the list is on disk, and
+# before the pre-apply gate so the gate checks the complete set; --needed makes
+# a re-apply a no-op.
+# ---------------------------------------------------------------------------
+
+step "Omarchy base packages"
+BASE_PACKAGE_LIST="$(host_path /usr/share/omarchy/install/omarchy-base.packages)"
+if [[ ! -r $BASE_PACKAGE_LIST ]]; then
+    echo "Warning: $BASE_PACKAGE_LIST is not readable (omarchy package missing?); skipping the base-package sweep." >&2
+    decide base_packages "list-missing"
+elif $DRY_RUN; then
+    echo "DRYRUN: install Omarchy's base packages ($BASE_PACKAGE_LIST) that are not installed yet"
+    decide base_packages "planned"
+else
+    mapfile -t BASE_MISSING < <(
+        comm -23 \
+            <(sed -e 's/#.*//' -e '/^[[:space:]]*$/d' "$BASE_PACKAGE_LIST" | sort -u) \
+            <(pacman -Qq | sort)
+    )
+    if ((${#BASE_MISSING[@]} == 0)); then
+        echo "Omarchy's base packages are all installed already."
+        decide base_packages "nothing-missing"
+    else
+        # Entries no configured repo carries are reported, not fatal: pacman
+        # would abort the whole transaction over them.
+        repo_names="$(pacman -Slq | sort -u)"
+        mapfile -t BASE_INSTALL < <(comm -12 <(printf '%s\n' "${BASE_MISSING[@]}" | sort) <(printf '%s\n' "$repo_names"))
+        mapfile -t BASE_UNKNOWN < <(comm -23 <(printf '%s\n' "${BASE_MISSING[@]}" | sort) <(printf '%s\n' "$repo_names"))
+        if ((${#BASE_UNKNOWN[@]})); then
+            echo "Note: not in any configured repo, skipping: ${BASE_UNKNOWN[*]}"
+        fi
+        if ((${#BASE_INSTALL[@]})); then
+            echo "Installing ${#BASE_INSTALL[@]} of Omarchy's base packages that are not installed yet:"
+            printf '    %s\n' "${BASE_INSTALL[*]}"
+            run_root env OMARCHY_ALLOW_DIRECT_PACMAN=1 pacman -S --needed --noconfirm "${BASE_INSTALL[@]}"
+            decide base_packages "installed:${#BASE_INSTALL[@]}"
+        else
+            echo "Nothing from ${BASE_PACKAGE_LIST} is installable from the configured repos."
+            decide base_packages "nothing-installable"
+        fi
+    fi
+fi
+
+# ---------------------------------------------------------------------------
 # Pre-apply gate
 #
 # Prove the units and commands the apply stages call exist, and say which
