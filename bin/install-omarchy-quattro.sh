@@ -1942,7 +1942,7 @@ else
     # the machine really has Secure Boot enforcing — sbctl signing is idempotent,
     # and without sbctl or keys there is nothing to sign with.
     if command -v sbctl >/dev/null 2>&1 &&
-        sbctl status 2>/dev/null | grep -qiE 'secure boot:?[[:space:]]*enabled'; then
+        sbctl status 2>/dev/null | grep -qiE 'secure[[:space:]]*boot:.*enabled'; then
         if $DRY_RUN; then
             echo "DRYRUN: sbctl sign /boot/EFI/BOOT/BOOTX64.EFI (Secure Boot is on; limine-install leaves the fallback loader unsigned)"
             decide secure_boot_fallback "would-sign"
