@@ -221,6 +221,19 @@ systemd initramfs).
 7. Backlog: opt-in debloat prompt inside the wrapper;
    `--restore-host-specific`; lab hardening (fixed 90 s wait, typed launch
    line) and merging the lab's `cachyos-guest` branch.
+8. **Secure Boot** — CachyOS supports it (its installer can set it up; Limine
+   with `ENABLE_UKI=yes` and `sbctl`-signed artefacts on a CachyOS host), and
+   nothing in this repo manages or disables it: the wrapper preserves an
+   existing `ENABLE_UKI`/`BOOT_ORDER`/`TARGET_OS_NAME` in `/etc/default/limine`
+   and only writes them when they are absent. But **no run has happened on a
+   Secure Boot machine**, and the installer rebuilds the initramfs
+   (`/usr/bin/mkinitcpio -P`, or `limine-mkinitcpio`) — after which anything
+   signed must be signed again. Validate on a Secure Boot host: `sbctl` present
+   and enrolled, run the wrapper, then `sbctl verify` (with `sbctl sign-all` if
+   it reports unsigned files), `bootctl status`, and a boot entry comparison;
+   the suite itself has no Secure Boot check yet (a candidate plan: report
+   `sbctl status`/`mokutil --sb-state` and assert the pre-run state is
+   unchanged).
 
 ## Fast orientation for an agent
 
