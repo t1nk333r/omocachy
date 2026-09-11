@@ -155,6 +155,21 @@ profile_read_paths() {
     done <"$file"
 }
 
+# True when $1 can be used safely as a path relative to $HOME: non-empty,
+# relative, no '.'/'..' component, no leading '/'. The component walk is the
+# authority — it mirrors what profile_read_paths emits, so a bundle produced
+# by this repo always passes. Everything a bundle supplies (manifest entries,
+# archive members) goes through it before it reaches cp/rm under $HOME.
+profile_rel_path_ok() {
+    local p="$1" part
+    [[ -n $p && $p != /* ]] || return 1
+    local IFS=/
+    for part in $p; do
+        [[ -n $part && $part != . && $part != .. ]] || return 1
+    done
+    return 0
+}
+
 # --- host-specific files --------------------------------------------------
 # Captured (they document the source machine) but not restored on top of a
 # working target by default: a monitor layout from another machine is at best
@@ -180,7 +195,12 @@ profile_plugin_rows() {
         id="$(basename "$p")"
         if [[ -e $p.git ]]; then
             kind=git
-            remote="$(git -C "$p" remote get-url origin 2>/dev/null || echo '-')"
+            # The recorded remote travels into manifest.json and SUMMARY.md;
+            # a URL-form remote can embed a token (https://user:tok@host/…),
+            # so the userinfo is stripped rather than carried into a bundle
+            # that gets copied around. scp-style git@host:path is left alone:
+            # there the "user" is an identity, not a credential.
+            remote="$(git -C "$p" remote get-url origin 2>/dev/null | sed 's|^\([a-z+][a-z+]*://\)[^/@]*@|\1|' || echo '-')"
             branch="$(git -C "$p" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '-')"
             commit="$(git -C "$p" rev-parse --short HEAD 2>/dev/null || echo '-')"
             if [[ -n "$(git -C "$p" status --porcelain 2>/dev/null)" ]]; then dirty=yes; else dirty=no; fi
@@ -225,8 +245,29 @@ profile_resolve_bundle() {
             printf 'archive bundle needs a work directory\n' >&2
             return 1
         }
+        # A bundle is user data — it arrives on a stick, as a mail attachment,
+        # from a chat — so the transport digest is checked before anything is
+        # unpacked, and a member that could land outside $workdir refuses the
+        # whole archive instead of being sanitised silently.
+        if [[ -f $arg.sha256 ]]; then
+            (cd "$(dirname "$arg")" && sha256sum -c --quiet "$(basename "$arg").sha256" >&2) || {
+                printf 'digest mismatch for %s; re-copy the bundle and re-run\n' "$arg" >&2
+                return 1
+            }
+        else
+            printf 'note: no .sha256 next to %s; cannot verify integrity\n' "$arg" >&2
+        fi
+        local member
+        while IFS= read -r member; do
+            # tar lists directories with a trailing slash; the validator walks
+            # components, so strip it instead of refusing every archive.
+            profile_rel_path_ok "${member%/}" || {
+                printf 'unsafe archive member: %s\n' "$member" >&2
+                return 1
+            }
+        done < <(tar -tf "$arg")
         mkdir -p "$workdir"
-        tar -C "$workdir" -xf "$arg" || return 1
+        tar -C "$workdir" --no-same-owner --no-same-permissions -xf "$arg" || return 1
         inner="$(find "$workdir" -maxdepth 2 -name manifest.json -printf '%h\n' -quit)"
         [[ -n $inner ]] || {
             printf 'no manifest.json inside %s\n' "$arg" >&2

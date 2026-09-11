@@ -292,7 +292,9 @@ systemctl --user list-unit-files --state=enabled --no-legend 2>/dev/null |
 systemctl list-unit-files --state=enabled --no-legend 2>/dev/null |
     awk '{print $1}' | sort >"$SYSTEM_UNITS" || : >"$SYSTEM_UNITS"
 
-YADM_REMOTE="$(yadm remote get-url origin 2>/dev/null || true)"
+# Recorded in manifest.json as source.yadm_remote: a URL-form remote can embed
+# a token, so scrub the userinfo the same way profile_plugin_rows does.
+YADM_REMOTE="$(yadm remote get-url origin 2>/dev/null | sed 's|^\([a-z+][a-z+]*://\)[^/@]*@|\1|' || true)"
 
 if ! $DRY_RUN; then
     cp -a "$NATIVE" "$FOREIGN" "$OMARCHY_REPO" "$MISE_TOOLS" "$BUNDLE/packages/"

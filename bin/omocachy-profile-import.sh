@@ -121,12 +121,30 @@ SCHEMA="$(profile_manifest "$BUNDLE" .schema)"
 [[ $SCHEMA == "$PROFILE_SCHEMA" ]] || die "bundle schema $SCHEMA, this script speaks $PROFILE_SCHEMA."
 
 SRC_HOST="$(profile_manifest "$BUNDLE" .source.host)"
+# The host name becomes part of a filename (.from-<host>), so a manifest that
+# carries a host with a slash in it must not steer the parked copy elsewhere.
+SRC_HOST_SAFE="${SRC_HOST//[^A-Za-z0-9._-]/_}"
 SRC_USER="$(profile_manifest "$BUNDLE" .source.user)"
 SRC_HOME="$(profile_manifest "$BUNDLE" .source.home)"
 SRC_OMARCHY="$(profile_manifest "$BUNDLE" .source.omarchy)"
 SRC_GPU="$(profile_manifest "$BUNDLE" .source.gpu)"
 SRC_CREATED="$(profile_manifest "$BUNDLE" .created)"
 mapfile -t CAPTURED < <(profile_manifest "$BUNDLE" '.payload.captured[]')
+
+# The manifest is user data like the rest of the bundle. A ".." entry clears
+# both existence gates in stage_configs ("$BUNDLE/home/$rel" exists, and the
+# escape target exists) and then drives mkdir -p/cp -a outside $HOME and an
+# rm -rf in the generated rollback. Refuse the bundle before anything under
+# $HOME is touched — no backup dir, no prompt.
+bad=()
+for rel in "${CAPTURED[@]}"; do
+    profile_rel_path_ok "$rel" || bad+=("$rel")
+done
+if ((${#bad[@]})); then
+    printf 'Refusing bundle: %d unsafe path(s) in payload.captured:\n' "${#bad[@]}" >&2
+    printf '  %q\n' "${bad[@]}" >&2
+    exit 1
+fi
 
 TGT_OMARCHY="$(pacman -Q omarchy 2>/dev/null | awk '{print $2}' || true)"
 TGT_ID="$(. /etc/os-release 2>/dev/null && echo "${ID:-unknown}")"
@@ -205,7 +223,7 @@ stage_configs() {
     for hs in "${PROFILE_HOST_SPECIFIC[@]}"; do
         [[ -e "$BUNDLE/home/$hs" ]] || continue
         $RESTORE_HOST_SPECIFIC && continue
-        target="$HOME/$hs.from-$SRC_HOST"
+        target="$HOME/$hs.from-$SRC_HOST_SAFE"
         if $DRY_RUN; then
             echo "DRYRUN: keep target's $hs; park the bundle's copy at $target"
         else
@@ -243,6 +261,11 @@ stage_configs() {
 # that existed, remove the ones it introduced. Nothing else is in scope.
 write_rollback() {
     local rel state
+    # Defence in depth inside the generated script: the list it replays comes
+    # from a manifest this run already validated, but restored.tsv is a plain
+    # file sitting next to the backup, and a hand-edited or truncated one must
+    # not turn the undo into an rm -rf outside $HOME.
+    local guard='    case "$1" in *..*|/*) echo "rollback: refusing unsafe path $1" >&2; return 1 ;; esac'
     {
         echo '#!/bin/bash'
         echo 'set -euo pipefail'
@@ -254,6 +277,7 @@ write_rollback() {
         echo "BACKUP=\"$BACKUP_DIR\""
         echo "HOME_DIR=\"$HOME\""
         echo 'restore() {'
+        echo "$guard"
         echo '    if $DRY; then echo "would restore $HOME_DIR/$1"; return; fi'
         echo '    # Stage the copy beside the target and swap it in, so a live'
         echo '    # desktop watching e.g. ~/.config/hypr never observes the'
@@ -266,6 +290,7 @@ write_rollback() {
         echo '    mv "$stage" "$HOME_DIR/$1"'
         echo '}'
         echo 'drop() {'
+        echo "$guard"
         echo '    if $DRY; then echo "would remove $HOME_DIR/$1"; return; fi'
         echo '    rm -rf "$HOME_DIR/$1"'
         echo '}'

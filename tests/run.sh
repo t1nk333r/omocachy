@@ -7,6 +7,7 @@
 #   tests/run.sh units        the pure bin/lib/profile.sh helpers
 #   tests/run.sh picker       the debloat picker's enumeration (--list)
 #   tests/run.sh gpu          GPU vendor dispatch, lspci stubbed
+#   tests/run.sh guard        the bundle trust boundary (manifest, digest, members)
 #   tests/run.sh matrix       the dry run against each tests/fixtures/* sysroot
 #   tests/run.sh purity       the dry-run contract (no state-changing binary runs)
 #
@@ -339,16 +340,109 @@ run_gpu() {
         "$(sed -n 's/^.*GPU vendor: *//p' "$out" | tail -1)"
 }
 
+# ---------------------------------------------------------------------------
+# The bundle trust boundary. A manifest is a file that arrives on a USB stick
+# or as a mail attachment, so the paths it supplies and the archive it arrives
+# in are checked before anything under $HOME is touched: every refusal below
+# happens before the backup directory, the prompt or any mkdir/cp under $HOME.
+run_guard() {
+    head_ "bundle guard"
+    local d="$WORK/guard" out rc row
+    mkdir -p "$d/evil"
+
+    # 1. ".." in payload.captured clears both existence gates in stage_configs
+    # ("$BUNDLE/home/$rel" exists, and the escape target exists) and then
+    # drives mkdir -p/cp -a outside $HOME, plus an rm -rf in the generated
+    # rollback. The import must refuse it instead of prompting.
+    printf '{"schema":1,"payload":{"captured":[".."]}}\n' >"$d/evil/manifest.json"
+    out="$d/evil.out"
+    bash "$REPO_DIR/bin/omocachy-profile-import.sh" \
+        --dry-run --yes --bundle "$d/evil" --only configs >"$out" 2>&1
+    rc=$?
+    expect_eq "manifest: a .. entry makes the import exit 1" "1" "$rc"
+    expect_contains "manifest: the refusal names payload.captured" \
+        "unsafe path(s) in payload.captured" "$(cat "$out")"
+    expect_contains "manifest: the offending entry is printed" "  .." "$(cat "$out")"
+
+    # 2. The validator behind it: the escape matters after a safe-looking first
+    # component too, which is why every component is walked, not just the first.
+    rp() { ( source "$REPO_DIR/bin/lib/profile.sh"; profile_rel_path_ok "$1" ) && echo ok || echo no; }
+    expect_eq "validator: a relative path is accepted" "ok" "$(rp '.config/hypr')"
+    expect_eq "validator: '..' is refused" "no" "$(rp '..')"
+    expect_eq "validator: an interior '..' is refused" "no" "$(rp 'a/../b')"
+    expect_eq "validator: an absolute path is refused" "no" "$(rp '/etc/passwd')"
+
+    # 3. Archives. A bundle exported with --archive carries its own digest, and
+    # its member names are as much user input as the manifest is.
+    resolve() { ( source "$REPO_DIR/bin/lib/profile.sh"; profile_resolve_bundle "$1" "$2" ) 2>&1; }
+    mkdir -p "$d/src/bundle/home/.config"
+    printf '{"schema":1,"payload":{"captured":[".config/guard"]}}\n' >"$d/src/bundle/manifest.json"
+    printf 'theme\n' >"$d/src/bundle/home/.config/guard"
+    tar -C "$d/src" -cf "$d/good.tar" bundle
+    (cd "$d" && sha256sum good.tar >good.tar.sha256)
+
+    out="$(resolve "$d/good.tar" "$d/w-good")"
+    rc=$?
+    expect_eq "archive: a good bundle resolves" "0" "$rc"
+    expect_eq "archive: the resolved directory is the bundle root" "$d/w-good/bundle" "$out"
+
+    # A bundle re-copied badly, or tampered with in transit.
+    cp "$d/good.tar" "$d/mismatch.tar"
+    printf '%064d  mismatch.tar\n' 0 >"$d/mismatch.tar.sha256"
+    out="$(resolve "$d/mismatch.tar" "$d/w-mismatch")"
+    rc=$?
+    expect_eq "archive: a digest mismatch refuses the bundle" "1" "$rc"
+    expect_contains "archive: the mismatch names the archive" \
+        "digest mismatch for $d/mismatch.tar" "$out"
+
+    # Bundles also travel by means that leave no digest beside them; that is a
+    # note, not a refusal.
+    cp "$d/good.tar" "$d/nodigest.tar"
+    out="$(resolve "$d/nodigest.tar" "$d/w-nodigest")"
+    rc=$?
+    expect_eq "archive: an absent .sha256 does not refuse the bundle" "0" "$rc"
+    expect_contains "archive: the absent digest is noted" \
+        "no .sha256 next to $d/nodigest.tar" "$out"
+
+    mkdir -p "$d/esc"
+    printf 'x\n' >"$d/esc/f"
+    tar -C "$d/esc" -cf "$d/evil.tar" --transform='s|^|../|' f 2>/dev/null
+    out="$(resolve "$d/evil.tar" "$d/w-evil")"
+    rc=$?
+    expect_eq "archive: a ../ member refuses the bundle" "1" "$rc"
+    expect_contains "archive: the ../ member is named" "unsafe archive member: ../f" "$out"
+
+    mkdir -p "$d/mid/a"
+    printf 'x\n' >"$d/mid/a/f"
+    tar -C "$d/mid" -cf "$d/mid.tar" --transform='s|^a/f$|a/../f|' a/f 2>/dev/null
+    out="$(resolve "$d/mid.tar" "$d/w-mid")"
+    rc=$?
+    expect_eq "archive: an interior .. member refuses the bundle" "1" "$rc"
+    expect_contains "archive: the interior .. member is named" "unsafe archive member: a/../f" "$out"
+    expect_eq "archive: a refused archive was not extracted" "" "$(find "$d/w-mid" -mindepth 1 2>/dev/null)"
+
+    # 4. Remotes recorded in the manifest. A URL-form remote can embed a token
+    # (https://user:tok@host/…), which must not be carried into the bundle.
+    mkdir -p "$d/plugins/thing"
+    git -C "$d/plugins/thing" init -q
+    git -C "$d/plugins/thing" remote add origin 'https://user:token@example.invalid/thing.git'
+    row="$( ( source "$REPO_DIR/bin/lib/profile.sh"; profile_plugin_rows "$d/plugins" ) |
+        awk -F'\t' '$1 == "thing" { print $3 }')"
+    expect_eq "plugin rows: the recorded remote keeps no userinfo" \
+        "https://example.invalid/thing.git" "$row"
+}
+
 case "${1:-all}" in
     lint)   run_lint ;;
     hooks)  run_hooks ;;
     units)  run_units ;;
     picker) run_picker ;;
     gpu)    run_gpu ;;
+    guard)  run_guard ;;
     matrix) run_matrix ;;
     purity) run_purity ;;
-    all)    run_lint; run_hooks; run_units; run_picker; run_gpu; run_matrix; run_purity ;;
-    *)      echo "Usage: $0 [lint|hooks|units|picker|gpu|matrix|purity|all]" >&2; exit 2 ;;
+    all)    run_lint; run_hooks; run_units; run_picker; run_gpu; run_guard; run_matrix; run_purity ;;
+    *)      echo "Usage: $0 [lint|hooks|units|picker|gpu|guard|matrix|purity|all]" >&2; exit 2 ;;
 esac
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
