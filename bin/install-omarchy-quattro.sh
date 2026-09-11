@@ -425,18 +425,40 @@ if [[ $BOOTLOADER == "unknown" ]]; then
     fi
 fi
 
-# LUKS detection: a crypto_LUKS block device, a non-comment /etc/crypttab
-# entry, or an unlock parameter on the kernel command line.
+# LUKS detection: whether the *root* device sits behind LUKS, plus an unlock
+# parameter on the kernel command line. A crypto_LUKS volume elsewhere (spare
+# disk, USB stick plugged in during the run) or a crypttab entry for a
+# non-root volume says nothing about how this machine boots, and refusing on
+# those alone would block a merge that is already correct for the way the
+# machine starts.
 CMDLINE="$(cat "$(host_path /proc/cmdline)" 2>/dev/null || true)"
 CMDLINE_CRYPT="$(cmdline_crypt_flavour "$CMDLINE")"
 
+# lsblk -s walks the device and its parents, so this is true for
+# LUKS -> LVM -> root chains and false for a LUKS data disk elsewhere.
+# Under a sysroot there is no live root device to inspect: the fixture
+# signals below (proc/cmdline, etc/crypttab) carry detection there.
+root_luks=false
+root_resolved=true
+if [[ -z $SYSROOT ]]; then
+    root_src="$(findmnt -no SOURCE / 2>/dev/null || true)"
+    if [[ -n $root_src ]]; then
+        if lsblk -sno FSTYPE "$root_src" 2>/dev/null | grep -q crypto_LUKS; then
+            root_luks=true
+        fi
+    else
+        root_resolved=false
+    fi
+fi
+
 LUKS_DETECTED=false
-if [[ -z $SYSROOT ]] && lsblk -o FSTYPE 2>/dev/null | grep -q crypto_LUKS; then
+if [[ $root_luks == true || $CMDLINE_CRYPT != none ]]; then
     LUKS_DETECTED=true
 elif [[ -f $(host_path /etc/crypttab) ]] && grep -qvE '^\s*#|^\s*$' "$(host_path /etc/crypttab)" 2>/dev/null; then
-    LUKS_DETECTED=true
-elif [[ $CMDLINE_CRYPT != none ]]; then
-    LUKS_DETECTED=true
+    echo "Warning: /etc/crypttab lists encrypted volumes but the root device is not one and the kernel command line unlocks nothing; treating this machine as unencrypted at boot." >&2
+fi
+if [[ $root_resolved == false && -z $SYSROOT ]]; then
+    echo "Warning: could not resolve the root device; LUKS detection falls back to the kernel command line only." >&2
 fi
 
 CURRENT_HOOKS="$(effective_hooks "$(host_path /etc/mkinitcpio.conf)" "$(host_path /etc/mkinitcpio.conf.d)")"
