@@ -372,7 +372,7 @@ run_picker() {
 # host's.
 run_gpu() {
     head_ "GPU dispatch"
-    local d="$WORK/gpu" out rc
+    local d="$WORK/gpu" out rc s
     mkdir -p "$d/empty" "$d/nvidia"
     printf '#!/bin/sh\nexit 0\n' >"$d/empty/lspci"
     printf '#!/bin/sh\necho "0000:01:00.0 VGA compatible controller: NVIDIA Corporation"\n' >"$d/nvidia/lspci"
@@ -383,6 +383,41 @@ run_gpu() {
     rc=$?
     expect_eq "gpu-setup: a GPU-less host exits 0" "0" "$rc"
     expect_contains "gpu-setup: the none branch is taken" "No GPU detected" "$(cat "$out")"
+
+    # A host with no AMD GPU must print its documented skip, not abort: the
+    # GPU_ID pipeline in amd-rocm.sh used to fail under pipefail before that
+    # guard could run (plan 033).
+    out="$d/noamd.out"
+    PATH="$d/empty:$PATH" bash "$REPO_DIR/bin/amd-rocm.sh" --dry-run >"$out" 2>&1
+    rc=$?
+    expect_eq "amd-rocm: a host with no AMD GPU exits 0" "0" "$rc"
+    expect_contains "amd-rocm: the skip is printed" "No AMD GPU found. Skipping." "$(cat "$out")"
+
+    # Every entry point refuses an unknown flag rather than ignoring it and
+    # taking the privileged path.
+    for s in gpu-setup nvidia amd-rocm; do
+        out="$d/flag-$s.out"
+        bash "$REPO_DIR/bin/$s.sh" --bogus >"$out" 2>&1
+        rc=$?
+        expect_eq "$s.sh: --bogus exits 1" "1" "$rc"
+        expect_contains "$s.sh: --bogus prints usage" "Usage: $s.sh [--dry-run]" "$(cat "$out")"
+    done
+
+    # The detector seam dispatches to the named vendor's script without
+    # consulting lspci at all; that vendor then no-ops on this GPU-less host.
+    for s in nvidia amd-rocm; do
+        out="$d/seam-$s.out"
+        PATH="$d/empty:$PATH" OMOCACHY_GPU_TYPE="${s%-rocm}" \
+            bash "$REPO_DIR/bin/gpu-setup.sh" --dry-run >"$out" 2>&1
+        expect_contains "detector seam: ${s%-rocm} dispatches to $s.sh" "running $s.sh" "$(cat "$out")"
+    done
+
+    out="$d/seam-bogus.out"
+    OMOCACHY_GPU_TYPE=bogus bash "$REPO_DIR/bin/gpu-setup.sh" >"$out" 2>&1
+    rc=$?
+    expect_eq "unknown detector value: exit 1" "1" "$rc"
+    expect_contains "unknown detector value: the dispatcher says so" \
+        "which this dispatcher does not know" "$(cat "$out")"
 
     # The sysroot seam: a fixture run must not consult the host probe at all,
     # so stub lspci to claim an NVIDIA card and require the printed summary to

@@ -16,8 +16,23 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=bin/lib/common.sh
 source "$SCRIPT_DIR/lib/common.sh"
 
+# --dry-run is the only flag. Anything else is a typo: testing $1 alone would
+# ignore a misordered flag and silently take the privileged path.
 DRY_RUN=false
-[[ ${1:-} == --dry-run ]] && DRY_RUN=true
+for arg in "$@"; do
+    case "$arg" in
+    --dry-run) DRY_RUN=true ;;
+    -h | --help)
+        echo "Usage: $(basename "$0") [--dry-run]"
+        exit 0
+        ;;
+    *)
+        echo "Unknown argument: $arg" >&2
+        echo "Usage: $(basename "$0") [--dry-run]" >&2
+        exit 1
+        ;;
+    esac
+done
 
 # Exit early if no NVIDIA GPU is present
 if ! lspci -nn -d 10de: | grep -qE "VGA|3D"; then

@@ -10,11 +10,28 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=bin/lib/common.sh
 source "$SCRIPT_DIR/lib/common.sh"
 
+# --dry-run is the only flag. Anything else is a typo: testing $1 alone would
+# ignore a misordered flag and silently take the privileged path.
 DRY_RUN=false
-[[ ${1:-} == --dry-run ]] && DRY_RUN=true
+for arg in "$@"; do
+    case "$arg" in
+    --dry-run) DRY_RUN=true ;;
+    -h | --help)
+        echo "Usage: $(basename "$0") [--dry-run]"
+        exit 0
+        ;;
+    *)
+        echo "Unknown argument: $arg" >&2
+        echo "Usage: $(basename "$0") [--dry-run]" >&2
+        exit 1
+        ;;
+    esac
+done
 
-# 1. Get AMD GPU ID
-GPU_ID=$(lspci -nn -d 1002: | grep -E "VGA|3D" | head -n1 | sed -n 's/.*\[1002:\([0-9a-fA-F]\{4\}\)\].*/\1/p')
+# 1. Get AMD GPU ID. The pipeline exits non-zero on a host with no AMD GPU
+# (grep finds nothing), which under pipefail aborted this script before its own
+# "no GPU" guard could print; `|| true` hands the empty result to the guard.
+GPU_ID=$(lspci -nn -d 1002: | grep -E "VGA|3D" | head -n1 | sed -n 's/.*\[1002:\([0-9a-fA-F]\{4\}\)\].*/\1/p' || true)
 
 if [[ -z $GPU_ID ]]; then
     info "No AMD GPU found. Skipping."
