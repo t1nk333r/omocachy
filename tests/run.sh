@@ -159,6 +159,23 @@ omarchy_stubs() {
     printf '%s' "$dir"
 }
 
+# The profile import's preflight is require_cmds tar jq pacman, and it runs
+# before it reads the bundle, so on a host without pacman (a CI runner) every
+# section that drives the import aborted with "missing required command(s):
+# pacman" before reaching the code under test. tar and jq are generic tools the
+# suite may rely on; pacman is the one Arch-only name, stubbed here for the
+# sections whose subject is not the preflight. It exits 97, so a path that
+# actually needs pacman fails loudly instead of being answered by the stub.
+pacman_stub() {
+    local dir="$WORK/pacman-stub"
+    if [[ ! -d $dir ]]; then
+        mkdir -p "$dir"
+        printf '#!/bin/sh\necho "test stub: pacman must not execute here" >&2\nexit 97\n' >"$dir/pacman"
+        chmod +x "$dir/pacman"
+    fi
+    printf '%s' "$dir"
+}
+
 dry_run_fixture() { # FIXTURE OUT DEC [extra args...]
     local fixture="$1" out="$2" dec="$3"; shift 3
     : >"$dec"
@@ -361,7 +378,7 @@ picker_section() { # OUT HEADER
 
 run_picker() {
     head_ "debloat picker"
-    local d="$WORK/picker" g="$WORK/picker-guards" b="$WORK/picker-own" out gout rc nstub bstub
+    local d="$WORK/picker" g="$WORK/picker-guards" b="$WORK/picker-own" out gout rc nstub bstub pstub
     mkdir -p "$d/apps" "$d/bin"
     printf '[Desktop Entry]\nExec=omarchy-launch-webapp https://example.invalid\n' >"$d/apps/Example.desktop"
     printf '[Desktop Entry]\nExec=xdg-terminal-exec --app-id=TUI.devtools\n' >"$d/apps/Devtools.desktop"
@@ -369,15 +386,37 @@ run_picker() {
     : >"$d/bindings.conf"
     printf '%s\n' 'omarchy-pkg-drop bash neovim' 'rm -f ~/.local/bin/codex' >"$d/upstream.sh"
 
+    # The picker filters the parsed package list through the host's `pacman
+    # -Qq`. A CI runner has no pacman, so it enumerated nothing, the Packages
+    # category came out empty, and the selection flow had nothing to plan.
+    # Stub the query with the set this fixture declares installed: bash, which
+    # upstream.sh asks to drop, and not neovim — also in the parsed block, but
+    # not installed here — so the category still proves the filter, not just
+    # the parse.
+    pstub="$WORK/picker-pacman"
+    mkdir -p "$pstub"
+    cat >"$pstub/pacman" <<'STUB'
+#!/bin/sh
+case "${1:-}" in
+-Qq) printf '%s\n' bash ;;   # of the parsed bash/neovim, only bash is installed here
+*) : ;;
+esac
+exit 0
+STUB
+    chmod +x "$pstub/pacman"
+
     out="$d/list.out"
+    PATH="$pstub:$PATH" \
     DQ_APP_DIR="$d/apps" DQ_BIN_DIR="$d/bin" \
     DQ_OMARCHY_SCRIPT="$d/upstream.sh" DQ_BINDINGS_FILE="$d/bindings.conf" \
         bash "$REPO_DIR/bin/debloat-quattro.sh" --list >"$out" 2>&1
     rc=$?
     expect_eq "picker: --list runs off a Quattro host" "0" "$rc"
-    # bash is on every Arch host; the package filter asks pacman for the real
-    # installed set, so no other name is guaranteed to appear.
     expect_contains "picker: installed package enumerated" "  bash" "$(picker_section "$out" "Packages")"
+    # neovim is in the parsed block but the stub does not report it installed,
+    # so listing it would mean the installed-set filter was gone.
+    expect_eq "picker: a parsed package that is not installed is not offered" "" \
+        "$(picker_section "$out" "Packages" | grep -x '  neovim')"
     expect_eq "picker: webapp enumerated" "  Example" "$(picker_section "$out" "Web apps")"
     expect_eq "picker: TUI enumerated" "  Devtools" "$(picker_section "$out" "TUIs")"
     expect_eq "picker: agent CLI stub enumerated" "  codex" "$(picker_section "$out" "Agent CLI stubs")"
@@ -395,6 +434,7 @@ run_picker() {
     printf 'hermes desktop command\n' >"$g/bin/hermes"
 
     gout="$g/list.out"
+    PATH="$pstub:$PATH" \
     DQ_APP_DIR="$d/apps" DQ_BIN_DIR="$g/bin" \
     DQ_OMARCHY_SCRIPT="$g/upstream.sh" DQ_BINDINGS_FILE="$d/bindings.conf" \
         bash "$REPO_DIR/bin/debloat-quattro.sh" --list >"$gout" 2>&1
@@ -414,6 +454,7 @@ run_picker() {
     # and the removal loop re-checks it before rm -f.
     rm "$g/bin/cursor-agent"
     printf '#!/bin/bash\nmise use -g --quiet "cursor-agent" || exit 1\n' >"$g/bin/cursor-agent"
+    PATH="$pstub:$PATH" \
     DQ_APP_DIR="$d/apps" DQ_BIN_DIR="$g/bin" \
     DQ_OMARCHY_SCRIPT="$g/upstream.sh" DQ_BINDINGS_FILE="$d/bindings.conf" \
         bash "$REPO_DIR/bin/debloat-quattro.sh" --list >"$gout" 2>&1
@@ -444,7 +485,7 @@ exit 0
 STUB
     chmod +x "$gstub/gum"
     out="$WORK/picker/empty-cat.out"
-    PATH="$gstub:$PATH" DQ_APP_DIR="$d/apps" DQ_BIN_DIR="$d/bin" \
+    PATH="$pstub:$gstub:$PATH" DQ_APP_DIR="$d/apps" DQ_BIN_DIR="$d/bin" \
     DQ_OMARCHY_SCRIPT="$d/upstream.sh" DQ_BINDINGS_FILE="$d/bindings.conf" \
         bash "$REPO_DIR/bin/debloat-quattro.sh" --dry-run >"$out" 2>&1
     rc=$?
@@ -477,7 +518,7 @@ exit 0
 STUB
     chmod +x "$nstub/gum"
     out="$WORK/picker/nothing.out"
-    PATH="$nstub:$PATH" DQ_APP_DIR="$d/apps" DQ_BIN_DIR="$d/bin" \
+    PATH="$pstub:$nstub:$PATH" DQ_APP_DIR="$d/apps" DQ_BIN_DIR="$d/bin" \
     DQ_OMARCHY_SCRIPT="$d/upstream.sh" DQ_BINDINGS_FILE="$d/bindings.conf" \
         bash "$REPO_DIR/bin/debloat-quattro.sh" --dry-run >"$out" 2>&1
     rc=$?
@@ -515,7 +556,7 @@ exit 0
 STUB
     chmod +x "$bstub/gum"
     out="$WORK/picker/own-guard.out"
-    PATH="$bstub:$PATH" DQ_APP_DIR="$d/apps" DQ_BIN_DIR="$b/bin" \
+    PATH="$pstub:$bstub:$PATH" DQ_APP_DIR="$d/apps" DQ_BIN_DIR="$b/bin" \
     DQ_OMARCHY_SCRIPT="$d/upstream.sh" DQ_BINDINGS_FILE="$d/bindings.conf" \
         bash "$REPO_DIR/bin/debloat-quattro.sh" --dry-run >"$out" 2>&1
     rc=$?
@@ -631,7 +672,10 @@ run_guard() {
     # rollback. The import must refuse it instead of prompting.
     printf '{"schema":1,"payload":{"captured":[".."]}}\n' >"$d/evil/manifest.json"
     out="$d/evil.out"
-    bash "$REPO_DIR/bin/omocachy-profile-import.sh" \
+    # PATH: the preflight is not the subject here — the manifest is — and on a
+    # runner without pacman it aborted before the refusal could be printed.
+    PATH="$(pacman_stub):$PATH" \
+        bash "$REPO_DIR/bin/omocachy-profile-import.sh" \
         --dry-run --yes --bundle "$d/evil" --only configs >"$out" 2>&1
     rc=$?
     expect_eq "manifest: a .. entry makes the import exit 1" "1" "$rc"
@@ -741,7 +785,7 @@ run_rollback() {
     # stage_configs adopts the newest live instance and reloads it, which from
     # a test would mean reloading the operator's desktop.
     _rollback_import() { # HOME
-        env HOME="$1" XDG_RUNTIME_DIR="$WORK/rollback/xdg" HYPRLAND_INSTANCE_SIGNATURE=none \
+        env PATH="$(pacman_stub):$PATH" HOME="$1" XDG_RUNTIME_DIR="$WORK/rollback/xdg" HYPRLAND_INSTANCE_SIGNATURE=none \
             bash "$REPO_DIR/bin/omocachy-profile-import.sh" \
             --bundle "$d" --only configs --yes 2>&1
     }
@@ -873,7 +917,28 @@ fi
 exit 0
 STUB
     cp "$shim/paru" "$shim/yay"
-    chmod +x "$shim/pacman" "$shim/sudo" "$shim/paru" "$shim/yay"
+
+    # target_repos() asks pacman-conf for the configured repos, falling back to
+    # a grep of /etc/pacman.conf for hosts without it. A CI runner has neither,
+    # so the target was read as configuring no repo at all, every failed
+    # install was reclassified as "the bundle names a repo this machine does
+    # not configure", and a genuine failure exited 0 with no failed list — the
+    # answers have to be the fixture's, not the host's. These are the repos the
+    # bundles below install from; omocachy-test-repo deliberately stays absent.
+    cat >"$shim/pacman-conf" <<'STUB'
+#!/bin/sh
+case "${1:-}" in
+--repo-list) printf '%s\n' core extra omarchy ;;
+*) : ;;
+esac
+exit 0
+STUB
+
+    # network_up() gates the whole stage on getent, so an unresolvable name on
+    # the runner would turn every expectation below into "SKIPPED (offline)".
+    printf '#!/bin/sh\nexit 0\n' >"$shim/getent"
+
+    chmod +x "$shim/pacman" "$shim/sudo" "$shim/paru" "$shim/yay" "$shim/pacman-conf" "$shim/getent"
 }
 
 run_packages() {
@@ -1065,7 +1130,7 @@ run_probe() {
     printf '{"schema":1,"source":{"host":"test","user":"me","home":"/home/me"},"payload":{"captured":[".config/omocachy-test"]}}\n' >"$d/manifest.json"
 
     _probe_import() { # HOME
-        env -u HYPRLAND_INSTANCE_SIGNATURE HOME="$1" XDG_RUNTIME_DIR="$WORK/probe/xdg" \
+        env -u HYPRLAND_INSTANCE_SIGNATURE PATH="$(pacman_stub):$PATH" HOME="$1" XDG_RUNTIME_DIR="$WORK/probe/xdg" \
             bash "$REPO_DIR/bin/omocachy-profile-import.sh" \
             --bundle "$d" --only configs --yes 2>&1
     }
