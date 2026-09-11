@@ -15,6 +15,13 @@ shellcheck CI workflow plan 001 introduces. All `basecamp/omarchy` facts were
 verified against master on 2026-08-17 — plans include their own upstream
 re-verification steps; run them.
 
+**2026-09-11 audit batch (plans 019–034).** A read-only audit of `e80b564`
+(the merge of the two parallel work lines) found and vetted sixteen items;
+each plan stamps that commit, so run its drift check before executing. Batch
+dependencies and rejected findings are at the end of this file. The v3-era
+context lines in this header describe branch `v3`, not `main` — plan 030
+reconciles them.
+
 ## Execution order & status
 
 | Plan | Title | Priority | Effort | Depends on | Status |
@@ -45,6 +52,23 @@ re-verification steps; run them.
 
 | 018 | Profile migration: carry an existing Omarchy desktop (Quickshell layer, plugins, tooling, packages, user units) onto CachyOS — `bin/omocachy-profile-export.sh`, `bin/omocachy-profile-import.sh` with backups + generated rollback, `bin/omocachy-doctor.sh`, shared `bin/lib/{common,profile}.sh`, plus the NVIDIA generation/VA-API/modeset bits adopted from jeanmartins7's fork | P1 | L | 015 | DONE (this session, branch `omocachy`; export/import/rollback/re-import exercised for real in the Omarchy lab VM with a screenshot of the migrated desktop and a green `./lab test`; package + mise transactions verified online on a real CachyOS guest the same day, together with the Quattro wrapper itself; the LUKS re-apply evidence from 2026-09-08 and the keyserver fix are in the plan file) |
 
+| 019 | `nvidia.sh`: install `libva-nvidia-driver` (the package that exists), probe `linux-cachyos-nvidia-open`, name a chwd profile that exists | P1 | S | — | TODO |
+| 020 | Bundle trust boundary: validate `payload.captured[]` paths, verify the shipped `.sha256`, safe archive extraction, strip remote userinfo | P1 | M | — | TODO |
+| 021 | Scope LUKS detection to the root device (no false refusal on an unencrypted-root host with a data LUKS volume) | P1 | S | — | TODO |
+| 022 | Write the rollback before merging, keep `restored.tsv` next to it, back up dangling symlinks | P1 | S | — | TODO |
+| 023 | Mirror upstream's ownership guards for cursor-agent / muse / hermes in the debloat picker | P2 | S | — | TODO |
+| 024 | Close the package deny-policy holes (current bootloader names; Mesa/AMD/Intel/lib32) | P2 | S | — | TODO |
+| 025 | `doctor --bundle`: fail on an unreadable manifest instead of passing vacuously | P2 | S | — | TODO |
+| 026 | Case-insensitive, broader inline-credential sweep; add the missing credential-store names | P2 | S | — | TODO |
+| 027 | Snapper assertion compares against a real backup, or says it cannot | P2 | S | serial with 021/028/031/032 | TODO |
+| 028 | Install log outside `$HOME` for `--dry-run`, `--verify-only` and `--skip-user-configs` | P2 | S | serial with 021/027/031/032 | TODO |
+| 029 | Regression baseline: `units`/`picker`/`gpu` sections in `tests/run.sh`; route the GPU probe through the sysroot seam | P2 | M | best after 020/022–026 | TODO |
+| 030 | Docs and version truth: 4.0.2 baseline warning, validation-status contradictions, v3-era index context | P2 | S–M | — | TODO |
+| 031 | `ensure_hookdir_lines`: keep `/etc/pacman.d/hooks/` listed in every branch (+ fixture) | P3 | S | serial with 021/027/028/032 | TODO |
+| 032 | Wrapper sources `bin/lib/common.sh`; `confirm` for both prompts (fixes the `--dry-run` prompt block) | P3 | M | after 029 | TODO |
+| 033 | GPU scripts: strict flag parsing, `default:` dispatch branch, reachable no-AMD guard | P3 | S | after 019 | TODO |
+| 034 | `tests/run.sh` lint: fail when shellcheck is missing; align with the documented `-x`/warning gate | P3 | S | — | TODO |
+
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale)
 
@@ -66,6 +90,22 @@ REJECTED (with one-line rationale)
   plan 001's shellcheck severity.
 - **011 is a spike**: its output needs maintainer approval before becoming
   plan 012.
+
+### 2026-09-11 audit batch (019–034)
+
+- **Wrapper serialization**: plans 021, 027, 028, 031 and 032 all edit
+  `bin/install-omarchy-quattro.sh`. Run them one at a time (each in its own
+  worktree, rebased on the previous), and re-run `tests/run.sh` after each.
+- **029 first or last, deliberately**: it adds the `units`/`picker`/`gpu`
+  sections the other plans' regression cases belong in. If it has landed, add
+  cases there; otherwise add them to the existing sections and say so in the
+  plan's review notes.
+- **032 after 029**: the wrapper refactor is the riskiest change in the batch;
+  the fixture matrix is its regression net and its `--dry-run` output must stay
+  identical modulo timestamps (plan 032 Step 5).
+- **033 after 019**: both edit `bin/nvidia.sh`.
+- **All batch plans**: drift-check first (`git diff --stat e80b564..HEAD`);
+  they were written against `e80b564` on 2026-09-11.
 
 ## MAJOR upstream discovery (2026-08-17, during plan 003 execution)
 
@@ -120,3 +160,23 @@ if any of these merge upstream, reconcile rather than duplicate:
 - **`fetch-omarchy.sh` `exit 0` on the keep-existing branch**: not a bug —
   it runs as a child process, so `exit 0` correctly returns control to the
   installer; plan 004 only improves its messaging.
+
+### From the 2026-09-11 audit (considered, not planned as separate items)
+
+- **Assertion-suite sysroot-ability** (routing the wrapper's ~18 `check_*`
+  functions through `host_path` so the suite can run against fixtures):
+  deferred, not rejected — it changes the suite's execution semantics and
+  deserves its own design; recorded in `029-regression-baseline.md`'s
+  maintenance notes.
+- **The GPU probe bypassing the sysroot seam**: folded into plan 029 Step 5
+  instead of a standalone plan.
+- **Performance**: nothing material for a shell installer; the one known cost
+  (theme wallpapers, 520 MB → 348 MB) already has the `--slim` path.
+- **Real-hardware validation gaps** (no NVIDIA/AMD in the lab, systemd-boot
+  guest never run): known and tracked in `handoff.md` §Release gates; not new
+  findings.
+- **The Jenkins agent secret**: known/external, tracked in `handoff.md`; not
+  re-planned.
+- **Directions not planned in this batch**: a `$HOME` test seam for the
+  profile trio, and an opt-in debloat step inside the wrapper — both remain
+  backlog items in `handoff.md`.
