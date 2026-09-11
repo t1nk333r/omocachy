@@ -9,6 +9,8 @@
 #   tests/run.sh gpu          GPU vendor dispatch, lspci stubbed
 #   tests/run.sh guard        the bundle trust boundary (manifest, digest, members)
 #   tests/run.sh rollback     the generated undo (written before the merge)
+#   tests/run.sh packages     the packages stage's policy and retries (stub pacman)
+#   tests/run.sh probe        the no-session import (the runtime probe is non-fatal)
 #   tests/run.sh matrix       the dry run against each tests/fixtures/* sysroot
 #   tests/run.sh purity       the dry-run contract (no state-changing binary runs)
 #
@@ -800,6 +802,289 @@ run_rollback() {
         "$(cat "$WORK/rollback/tamper/canary" 2>/dev/null)"
 }
 
+# ---------------------------------------------------------------------------
+# The packages stage's decision logic, driven with a stub pacman so the answers
+# are ours and nothing is installed. Covers what a real CachyOS run needed
+# (plan 044): a package whose source repository this machine does not
+# configure, a wanted package that conflicts with an installed provider, the
+# retry after a stale database, the --overwrite retry for files no package
+# owns, and a genuine failure that fails the run instead of being reported as
+# "PARTIAL".
+pkg_stub() { # SHIM STATE
+    local shim="$1" state="$2"
+    mkdir -p "$shim" "$state/si"
+    cat >"$shim/pacman" <<'STUB'
+#!/bin/sh
+# Test stub for tests/run.sh: answers the queries stage_packages makes and
+# records every install attempt. It touches nothing on the host.
+set -u
+: "${PKG_STUB_DIR:?}"
+for pkgarg in "$@"; do :; done
+case "${1:-}" in
+-Qq) cat "$PKG_STUB_DIR/installed.txt" 2>/dev/null ;;
+-Q)
+    grep -qxF "${pkgarg:-}" "$PKG_STUB_DIR/installed.txt" 2>/dev/null &&
+        printf '%s 1.0-1\n' "$pkgarg" || exit 1
+    ;;
+-Qi)
+    if grep -qxF "${pkgarg:-}" "$PKG_STUB_DIR/installed.txt" 2>/dev/null ||
+        { [ -f "$PKG_STUB_DIR/provides.tsv" ] &&
+            cut -f2 "$PKG_STUB_DIR/provides.tsv" | tr ' ' '\n' | grep -qxF "${pkgarg:-}"; }; then
+        printf 'Name            : %s\n' "$pkgarg"
+    else
+        exit 1
+    fi
+    ;;
+-Si)
+    [ -f "$PKG_STUB_DIR/si/${pkgarg:-}" ] || exit 1
+    cat "$PKG_STUB_DIR/si/${pkgarg:-}"
+    ;;
+-Sy) printf 'refresh\n' >>"$PKG_STUB_DIR/calls.log" ;;
+-S)
+    n=0
+    [ -f "$PKG_STUB_DIR/attempts" ] && n="$(cat "$PKG_STUB_DIR/attempts")"
+    n=$((n + 1))
+    printf '%s' "$n" >"$PKG_STUB_DIR/attempts"
+    printf 'S%s %s\n' "$n" "$*" >>"$PKG_STUB_DIR/calls.log"
+    if [ "$n" -le "$(cat "$PKG_STUB_DIR/fail-attempts" 2>/dev/null || echo 0)" ]; then
+        cat "$PKG_STUB_DIR/fail-output" 2>/dev/null
+        exit 1
+    fi
+    ;;
+*) : ;;
+esac
+exit 0
+STUB
+    printf '#!/bin/sh\nexec "$@"\n' >"$shim/sudo"
+    cat >"$shim/paru" <<'STUB'
+#!/bin/sh
+printf 'paru %s\n' "$*" >>"$PKG_STUB_DIR/calls.log"
+for helperarg in "$@"; do :; done
+if [ -f "$PKG_STUB_DIR/fail-helper" ] &&
+    grep -qxF "${helperarg:-}" "$PKG_STUB_DIR/fail-helper"; then
+    exit 1
+fi
+exit 0
+STUB
+    cp "$shim/paru" "$shim/yay"
+    chmod +x "$shim/pacman" "$shim/sudo" "$shim/paru" "$shim/yay"
+}
+
+run_packages() {
+    head_ "package policy"
+    local shim="$WORK/pkgshim" stub="$WORK/pkgstub" d="$WORK/pkg" out rc rep
+    mkdir -p "$d/bundle/packages"
+    printf '{"schema":1,"source":{"host":"test","user":"me","home":"/home/me"},"payload":{"captured":[]}}\n' >"$d/bundle/manifest.json"
+    pkg_stub "$shim" "$stub"
+    : >"$d/bundle/packages/explicit-foreign.txt"
+
+    pkg_import() { # BUNDLE HOME
+        local bundle="$1" home="$2"
+        mkdir -p "$home"
+        env PATH="$shim:$PATH" HOME="$home" PKG_STUB_DIR="$stub" \
+            bash "$REPO_DIR/bin/omocachy-profile-import.sh" \
+            --bundle "$bundle" --only packages --yes
+    }
+
+    # 1. A wanted package that conflicts with what the target already has.
+    #    The importer removes nothing, so --noconfirm would answer "no" to
+    #    pacman's removal prompt and the whole transaction would fail to
+    #    prepare; the target's package wins and the other side is skipped with
+    #    its reason.
+    printf '%s\n' jack2 mise-bin >"$stub/installed.txt"
+    printf 'jack2\tjack\n' >"$stub/provides.tsv"
+    cat >"$stub/si/pipewire-jack" <<'SI'
+Repository      : extra
+Name            : pipewire-jack
+Conflicts With  : jack  jack2  pipewire-jack-client
+SI
+    printf 'Repository      : extra\nName            : mise\nConflicts With  : mise-bin\n' >"$stub/si/mise"
+    printf 'Repository      : extra\nName            : mangohud\nConflicts With  : None\n' >"$stub/si/mangohud"
+    printf '%s\n' pipewire-jack mise mangohud >"$d/bundle/packages/explicit-native.txt"
+    printf 'pipewire-jack\textra\nmise\textra\nmangohud\textra\n' >"$d/bundle/packages/repos.tsv"
+    : >"$stub/calls.log"
+    rm -f "$stub/attempts" "$stub/fail-attempts"
+    out="$(pkg_import "$d/bundle" "$WORK/pkg/home1" 2>&1)"
+    rc=$?
+    expect_eq "packages: a conflict-free batch exits 0" "0" "$rc"
+    expect_contains "packages: pipewire-jack is skipped against the installed jack2" \
+        "policy: pipewire-jack" "$out"
+    expect_contains "packages: the reason names jack2, not the virtual jack it provides" \
+        "conflicts with jack2" "$out"
+    expect_contains "packages: a wanted package conflicting with the installed provider is skipped" \
+        "conflicts with mise-bin" "$out"
+    expect_contains "packages: the remaining package still goes in one transaction" \
+        "S1 -S --needed --noconfirm -- mangohud" "$(cat "$stub/calls.log")"
+    expect_contains "packages: a stage with no failures is OK" "packages: OK" "$out"
+
+    # The same rule the other way round: the target has the source-built mise,
+    # so the omarchy repo's mise-bin must not be forced over it.
+    printf 'mise\n' >"$stub/installed.txt"
+    printf 'Repository      : omarchy\nName            : mise-bin\nConflicts With  : mise\n' >"$stub/si/mise-bin"
+    printf 'mise-bin\n' >"$d/bundle/packages/explicit-native.txt"
+    printf 'mise-bin\tomarchy\n' >"$d/bundle/packages/repos.tsv"
+    : >"$stub/calls.log"
+    rm -f "$stub/attempts"
+    out="$(pkg_import "$d/bundle" "$WORK/pkg/home2" 2>&1)"
+    rc=$?
+    expect_eq "packages: mise-bin against an installed mise exits 0" "0" "$rc"
+    expect_contains "packages: mise-bin is skipped against the installed mise" \
+        "conflicts with mise" "$out"
+    expect_eq "packages: a skipped conflict is never installed" "" \
+        "$(sed -n '/^S[0-9]/p' "$stub/calls.log")"
+
+    # 2. Repository awareness. pacman -Qqen calls a chaotic-aur package
+    #    "native", so without the recorded repo the importer hands it to the
+    #    AUR helper, which cannot provide chaotic-keyring at all and fails it.
+    #    The recorded repo is used when the helper fails: a failure for a
+    #    package from a repo this machine does not configure becomes a printed
+    #    policy skip instead of a run-failing error. The controls keep that
+    #    honest — a package the helper *can* get (whether recorded from an
+    #    unconfigured repo or from a configured one) is still installed, never
+    #    pre-skipped for its origin.
+    printf '%s\n' omocachy-tests-only-in-absent-repo omocachy-tests-only-in-aur \
+        >"$d/bundle/packages/explicit-native.txt"
+    printf 'omocachy-tests-only-in-absent-repo\tomocachy-test-repo\nomocachy-tests-only-in-aur\textra\n' \
+        >"$d/bundle/packages/repos.tsv"
+    : >"$stub/installed.txt"
+    : >"$stub/calls.log"
+    printf 'omocachy-tests-only-in-absent-repo\n' >"$stub/fail-helper"
+    rm -f "$stub/attempts"
+    out="$(pkg_import "$d/bundle" "$WORK/pkg/home3" 2>&1)"
+    rc=$?
+    rep="$(echo "$WORK/pkg/home3"/.local/state/omocachy/reports/import-*)"
+    expect_eq "packages: a helper failure for an unconfigured repo exits 0" "0" "$rc"
+    expect_contains "packages: it is reported as a policy skip" \
+        "policy: omocachy-tests-only-in-absent-repo" "$out"
+    expect_contains "packages: the reason names the repository" \
+        "source repo 'omocachy-test-repo' is not configured here" "$out"
+    expect_eq "packages: the reclassified skip is not a failure" "no" \
+        "$([[ -f $rep/packages-failed.txt ]] && echo yes || echo no)"
+    expect_contains "packages: the skip is written to the policy report" \
+        "omocachy-test-repo" "$(cat "$rep/packages-skipped-by-policy.tsv" 2>/dev/null)"
+    expect_contains "packages: a package from a configured repo still goes to the helper" \
+        "paru -S --needed --noconfirm -- omocachy-tests-only-in-aur" "$(cat "$stub/calls.log")"
+    expect_contains "packages: the helper's package is recorded as foreign" \
+        "omocachy-tests-only-in-aur" "$(cat "$rep/packages-foreign.txt" 2>/dev/null)"
+
+    # The control: the same package, with a helper that can get it (the AUR has
+    # helium-browser-bin though the source machine's repo was chaotic-aur). It
+    # must install, and must not be reported as a policy skip for its origin.
+    rm -f "$stub/fail-helper"
+    : >"$stub/calls.log"
+    rm -f "$stub/attempts"
+    out="$(pkg_import "$d/bundle" "$WORK/pkg/home3b" 2>&1)"
+    rc=$?
+    expect_eq "packages: a package the helper can get exits 0" "0" "$rc"
+    expect_eq "packages: an obtainable package is never pre-skipped for its repo" "" \
+        "$(sed -n '/^    policy: omocachy-tests-only-in-absent-repo/p' <<<"$out")"
+    expect_contains "packages: the obtainable package is installed by the helper" \
+        "paru -S --needed --noconfirm -- omocachy-tests-only-in-absent-repo" "$(cat "$stub/calls.log")"
+
+    # 3. A stale database: the name is still in the DB while the file behind it
+    #    has been rolled off the mirror, so the batch dies on a 404. Refresh
+    #    once and retry the same transaction before demoting it to one
+    #    transaction per package.
+    printf 'mangohud\n' >"$d/bundle/packages/explicit-native.txt"
+    printf 'mangohud\textra\n' >"$d/bundle/packages/repos.tsv"
+    : >"$stub/installed.txt"
+    : >"$stub/calls.log"
+    rm -f "$stub/attempts"
+    printf '1' >"$stub/fail-attempts"
+    printf "error: failed retrieving file 'python-matplotlib-3.10.7-1-x86_64.pkg.tar.zst' from mirror: The requested URL returned error: 404\n" >"$stub/fail-output"
+    out="$(pkg_import "$d/bundle" "$WORK/pkg/home4" 2>&1)"
+    rc=$?
+    rep="$(echo "$WORK/pkg/home4"/.local/state/omocachy/reports/import-*)"
+    expect_eq "packages: a stale-database retry exits 0" "0" "$rc"
+    expect_contains "packages: the databases are refreshed once before the retry" \
+        "refresh" "$(cat "$stub/calls.log")"
+    expect_contains "packages: the batch is retried, not split" "S2 -S --needed" "$(cat "$stub/calls.log")"
+    expect_contains "packages: the stage reports OK after the retry" "packages: OK" "$out"
+    expect_eq "packages: nothing is recorded as failed" "no" \
+        "$([[ -f $rep/packages-failed.txt ]] && echo yes || echo no)"
+
+    # 4. Files no package owns — the plan-043 conflict (yaru-icon-theme vs
+    #    /usr/share/icons/Yaru). Retry with --overwrite limited to exactly the
+    #    paths pacman named, and nothing else.
+    printf 'yaru-icon-theme\n' >"$d/bundle/packages/explicit-native.txt"
+    printf 'yaru-icon-theme\tomarchy\n' >"$d/bundle/packages/repos.tsv"
+    printf 'Repository      : omarchy\nName            : yaru-icon-theme\nConflicts With  : None\n' >"$stub/si/yaru-icon-theme"
+    : >"$stub/calls.log"
+    rm -f "$stub/attempts"
+    printf '2' >"$stub/fail-attempts"
+    cat >"$stub/fail-output" <<'SI'
+error: failed to commit transaction (conflicting files)
+yaru-icon-theme: /usr/share/icons/Yaru/16x16/actions/go-next-symbolic.svg exists in filesystem
+yaru-icon-theme: /usr/share/icons/Yaru/16x16/actions/go-previous-symbolic.svg exists in filesystem
+SI
+    out="$(pkg_import "$d/bundle" "$WORK/pkg/home5" 2>&1)"
+    rc=$?
+    expect_eq "packages: the --overwrite retry exits 0" "0" "$rc"
+    expect_contains "packages: the overwrite retry is reported with its count" \
+        "retrying with --overwrite for 2 file(s)" "$out"
+    expect_contains "packages: --overwrite carries exactly the paths pacman named" \
+        "--overwrite /usr/share/icons/Yaru/16x16/actions/go-next-symbolic.svg,/usr/share/icons/Yaru/16x16/actions/go-previous-symbolic.svg" \
+        "$(cat "$stub/calls.log")"
+    expect_contains "packages: the stage reports OK after the overwrite retry" "packages: OK" "$out"
+
+    # 5. A failure that is not a policy skip fails the run. "PARTIAL" matched
+    #    neither the final FAILED check nor the doctor's, so six missing
+    #    packages used to report success.
+    printf 'mangohud\n' >"$d/bundle/packages/explicit-native.txt"
+    printf 'mangohud\textra\n' >"$d/bundle/packages/repos.tsv"
+    : >"$stub/calls.log"
+    rm -f "$stub/attempts"
+    printf '99' >"$stub/fail-attempts"
+    : >"$stub/fail-output"
+    out="$(pkg_import "$d/bundle" "$WORK/pkg/home6" 2>&1)"
+    rc=$?
+    rep="$(echo "$WORK/pkg/home6"/.local/state/omocachy/reports/import-*)"
+    expect_eq "packages: a real failure exits non-zero" "1" "$rc"
+    expect_contains "packages: the stage is reported FAILED" "packages: FAILED" "$out"
+    expect_eq "packages: the failing package is listed in packages-failed.txt" "mangohud" \
+        "$(cat "$rep/packages-failed.txt" 2>/dev/null)"
+}
+
+# ---------------------------------------------------------------------------
+# The runtime probe in stage_configs. An import over ssh has no session:
+# HYPRLAND_INSTANCE_SIGNATURE is unset and there is no $XDG_RUNTIME_DIR/hypr to
+# adopt. find exits 1 on the missing directory and under set -e + pipefail that
+# aborted the whole run at the end of the configs stage, before packages, mise,
+# services and verify ever ran (plan 044).
+run_probe() {
+    head_ "no-session runtime probe"
+    local d="$WORK/probe/bundle" h out rc
+    mkdir -p "$d/home/.config/omocachy-test" "$WORK/probe/xdg"
+    printf 'from the bundle\n' >"$d/home/.config/omocachy-test/marker"
+    printf '{"schema":1,"source":{"host":"test","user":"me","home":"/home/me"},"payload":{"captured":[".config/omocachy-test"]}}\n' >"$d/manifest.json"
+
+    _probe_import() { # HOME
+        env -u HYPRLAND_INSTANCE_SIGNATURE HOME="$1" XDG_RUNTIME_DIR="$WORK/probe/xdg" \
+            bash "$REPO_DIR/bin/omocachy-profile-import.sh" \
+            --bundle "$d" --only configs --yes 2>&1
+    }
+
+    h="$WORK/probe/home"
+    mkdir -p "$h"
+    out="$(_probe_import "$h")"
+    rc=$?
+    expect_eq "probe: an import with no session exits 0" "0" "$rc"
+    expect_contains "probe: the configs stage is reported OK" "configs: OK" "$out"
+    expect_contains "probe: the run reaches the result summary" "--- Result ---" "$out"
+    expect_eq "probe: the payload is still merged" "from the bundle" \
+        "$(cat "$h/.config/omocachy-test/marker" 2>/dev/null)"
+
+    # An instance directory that exists but no compositor answers it: the probe
+    # adopts it, hyprctl then fails, and that is still not an error.
+    mkdir -p "$WORK/probe/xdg/hypr/instance-1"
+    h="$WORK/probe/home2"
+    mkdir -p "$h"
+    out="$(_probe_import "$h")"
+    rc=$?
+    expect_eq "probe: an adopted instance that does not answer is not fatal" "0" "$rc"
+    expect_contains "probe: the second run finishes the stage too" "configs: OK" "$out"
+}
+
 case "${1:-all}" in
     lint)     run_lint ;;
     hooks)    run_hooks ;;
@@ -808,10 +1093,12 @@ case "${1:-all}" in
     gpu)      run_gpu ;;
     guard)    run_guard ;;
     rollback) run_rollback ;;
+    packages) run_packages ;;
+    probe)    run_probe ;;
     matrix)   run_matrix ;;
     purity)   run_purity ;;
-    all)      run_lint; run_hooks; run_units; run_picker; run_gpu; run_guard; run_rollback; run_matrix; run_purity ;;
-    *)        echo "Usage: $0 [lint|hooks|units|picker|gpu|guard|rollback|matrix|purity|all]" >&2; exit 2 ;;
+    all)      run_lint; run_hooks; run_units; run_picker; run_gpu; run_guard; run_rollback; run_packages; run_probe; run_matrix; run_purity ;;
+    *)        echo "Usage: $0 [lint|hooks|units|picker|gpu|guard|rollback|packages|probe|matrix|purity|all]" >&2; exit 2 ;;
 esac
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"

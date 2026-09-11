@@ -268,6 +268,23 @@ NATIVE="$WORK/explicit-native.txt"
 FOREIGN="$WORK/explicit-foreign.txt"
 pacman -Qqen 2>/dev/null | sort >"$NATIVE" || : >"$NATIVE"
 pacman -Qqem 2>/dev/null | sort >"$FOREIGN" || : >"$FOREIGN"
+# The repository each explicit package came from. pacman -Qqen counts a
+# package from a third-party *sync* repo (chaotic-aur) as native, so on its own
+# the two lists cannot tell it from an official one and the importer hands it
+# to the AUR helper, which cannot provide it. A package no configured repo has
+# (AUR/foreign) is labelled "aur". One pacman -Si per package, local DB only.
+REPOS="$WORK/repos.tsv"
+: >"$REPOS"
+while IFS= read -r pkg; do
+    # One row per package. `pacman -Si <name>` can print several package blocks
+    # when the name is also a provider (jack → jack2 and pipewire-jack), so
+    # only the first Repository line is taken; and the extractor reads pacman's
+    # whole output rather than quitting early, because a writer that gets
+    # SIGPIPE makes the pipeline fail under pipefail. A name no configured repo
+    # has (AUR/foreign) is labelled "aur".
+    repo="$(pacman -Si "$pkg" 2>/dev/null | awk -F': *' '/^Repository/ && !seen { print $2; seen = 1 }' || true)"
+    printf '%s\t%s\n' "$pkg" "${repo:-aur}"
+done < <(cat "$NATIVE" "$FOREIGN" | sort -u) >"$REPOS"
 # Explicit packages that came from the [omarchy] repo: the importer gets them
 # from the same repo, which install-omarchy-quattro.sh has already added.
 OMARCHY_REPO="$WORK/omarchy-repo.txt"
@@ -297,7 +314,7 @@ systemctl list-unit-files --state=enabled --no-legend 2>/dev/null |
 YADM_REMOTE="$(yadm remote get-url origin 2>/dev/null | sed 's|^\([a-z+][a-z+]*://\)[^/@]*@|\1|' || true)"
 
 if ! $DRY_RUN; then
-    cp -a "$NATIVE" "$FOREIGN" "$OMARCHY_REPO" "$MISE_TOOLS" "$BUNDLE/packages/"
+    cp -a "$NATIVE" "$FOREIGN" "$REPOS" "$OMARCHY_REPO" "$MISE_TOOLS" "$BUNDLE/packages/"
     cp -a "$USER_UNITS" "$SYSTEM_UNITS" "$BUNDLE/services/"
     cp -a "$PLUGIN_TSV" "$SHELL_IDS" "$BUNDLE/system/"
     cp -a "$SECRETS_REMOVED" "$INLINE_SECRETS" "$WORK/secret-exemptions.txt" "$BUNDLE/system/"
@@ -338,6 +355,7 @@ write_manifest() {
         --rawfile inline "$INLINE_SECRETS" \
         --rawfile native "$NATIVE" \
         --rawfile foreign "$FOREIGN" \
+        --rawfile repos "$REPOS" \
         --rawfile omarchy_repo "$OMARCHY_REPO" \
         --rawfile user_units "$USER_UNITS" \
         '
@@ -362,6 +380,7 @@ write_manifest() {
           packages: {
             explicit_native: ($native | lines),
             explicit_foreign: ($foreign | lines),
+            repo_of: ($repos | lines | map(split("\t") | { package: .[0], repo: .[1] })),
             from_omarchy_repo: ($omarchy_repo | lines)
           },
           services: { user_enabled: ($user_units | lines) },
@@ -395,6 +414,7 @@ else
         echo "| Payload | $PAYLOAD_SIZE across ${#PRESENT[@]} paths |"
         echo "| Plugins | $PLUGIN_COUNT ($PLUGIN_LOCAL local-only — this bundle is their only copy) |"
         echo "| Explicit packages | $(wc -l <"$NATIVE" | tr -d ' ') native, $(wc -l <"$FOREIGN" | tr -d ' ') foreign/AUR |"
+        echo "| Package repos | $(awk -F'\t' '!seen[$2]++ { printf "%s ", $2 }' "$REPOS") |"
         echo "| Enabled user units | $(wc -l <"$USER_UNITS" | tr -d ' ') |"
         echo "| Slim | $SLIM |"
         echo ""
@@ -437,6 +457,9 @@ if $ARCHIVE && ! $DRY_RUN; then
     chmod 600 "$ARCHIVE_PATH"
     (cd "$(dirname "$ARCHIVE_PATH")" && sha256sum "$(basename "$ARCHIVE_PATH")" >"$ARCHIVE_PATH.sha256")
     echo "    $ARCHIVE_PATH ($(du -sh "$ARCHIVE_PATH" | cut -f1))"
+    echo "    $(basename "$ARCHIVE_PATH").sha256 — carry it beside the archive: the"
+    echo "      importer verifies it before unpacking, and without it the run can"
+    echo "      only warn that the bundle could not be verified."
 elif $ARCHIVE; then
     echo "DRYRUN: would write $BUNDLE.tar.zst + .sha256"
 fi
@@ -451,4 +474,10 @@ echo "Bundle: $BUNDLE ($PAYLOAD_SIZE payload)"
 echo "  plugins: $PLUGIN_COUNT ($PLUGIN_LOCAL local-only), secrets removed: $SECRET_HITS, files with inline credentials: $INLINE_HITS"
 echo ""
 echo "Next: on the CachyOS target, install Omarchy 4 with bin/install-omarchy-quattro.sh,"
-echo "then restore this bundle with bin/omocachy-profile-import.sh --bundle $BUNDLE_ID"
+if [[ -n ${ARCHIVE_PATH:-} ]]; then
+    echo "then copy $(basename "$ARCHIVE_PATH") AND $(basename "$ARCHIVE_PATH").sha256 there"
+    echo "(the importer verifies the digest before unpacking), and restore it with"
+    echo "  bin/omocachy-profile-import.sh --bundle <archive>"
+else
+    echo "then restore this bundle with bin/omocachy-profile-import.sh --bundle $BUNDLE_ID"
+fi

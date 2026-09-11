@@ -243,9 +243,23 @@ stage_configs() {
         # ~/.config/hypr can reload inside that window and keep showing
         # "cannot open hyprland.lua" until the next reload (seen on the
         # CachyOS guest, plan 018). Reload once the merge is complete.
+        #
+        # The probe below has to survive a machine with no session, which is
+        # the normal case for an import: over ssh HYPRLAND_INSTANCE_SIGNATURE
+        # is unset, and with no desktop there is no $XDG_RUNTIME_DIR/hypr for
+        # it to find. There find exits 1 on a missing directory, and under
+        # set -e + pipefail that aborted the whole run at the end of the
+        # configs stage — before packages, mise, services and verify (plan
+        # 044). An absent instance is not an error: it only means there is
+        # nothing to reload.
         if [[ -z ${HYPRLAND_INSTANCE_SIGNATURE:-} ]]; then
-            newest_hypr="$(find "${XDG_RUNTIME_DIR:-/run/user/$UID}/hypr" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %f\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2)"
-            [[ -n $newest_hypr ]] && export HYPRLAND_INSTANCE_SIGNATURE="$newest_hypr"
+            newest_hypr=""
+            if [[ -d ${XDG_RUNTIME_DIR:-/run/user/$UID}/hypr ]]; then
+                newest_hypr="$(find "${XDG_RUNTIME_DIR:-/run/user/$UID}/hypr" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %f\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2 || true)"
+            fi
+            if [[ -n $newest_hypr ]]; then
+                export HYPRLAND_INSTANCE_SIGNATURE="$newest_hypr"
+            fi
         fi
         if have hyprctl && hyprctl -j version &>/dev/null; then
             hyprctl reload >/dev/null 2>&1 && echo "    reloaded the running Hyprland"
@@ -314,9 +328,73 @@ network_up() {
         timeout 5 getent ahostsv4 archlinux.org &>/dev/null
 }
 
+# The repositories this machine configures. pacman-conf reads [options] and
+# every Include=, which a grep of /etc/pacman.conf alone would miss; the
+# fallback is for a host without pacman-conf.
+target_repos() {
+    local out=""
+    have pacman-conf && out="$(pacman-conf --repo-list 2>/dev/null || true)"
+    if [[ -z $out ]]; then
+        out="$(sed -n 's/^\[\([^]]*\)\]$/\1/p' /etc/pacman.conf 2>/dev/null | grep -vx options || true)"
+    fi
+    [[ -n $out ]] && printf '%s\n' "$out"
+}
+
+# The repository the bundle recorded for a package (packages/repos.tsv), if it
+# carries the table at all. pacman -Qqen cannot tell an official repo from a
+# third-party *sync* repo, so a chaotic-aur package looks native to the
+# exporter; the importer uses the recorded repo to explain a helper failure
+# that is really "this machine does not configure the repo the source machine
+# had" (plan 044: chaotic-keyring, chaotic-mirrorlist) instead of counting it
+# as a broken package. Bundles written before this field carry no repos.tsv,
+# and then this answers nothing.
+bundle_repo_of() { # PKG
+    local tsv="$BUNDLE/packages/repos.tsv"
+    [[ -f $tsv ]] || return 1
+    awk -F'\t' -v p="$1" '$1 == p { print $2; found = 1 } END { exit !found }' "$tsv"
+}
+
+# The installed package a wanted package conflicts with, if any. The importer
+# never removes packages, so a conflict with something the target already has
+# makes pacman answer "no" to its removal prompt under --noconfirm, and the
+# whole transaction fails to prepare (plan 044: pipewire-jack vs jack2,
+# mise-bin vs mise). The target's package wins and the wanted one is skipped
+# with its reason. A conflict naming an installed package outright is reported
+# (jack2, not the virtual jack it provides); `pacman -Qi` resolves a virtual
+# name the way pacman's own conflict check does, as the fallback.
+installed_conflict() { # SI_OUTPUT INSTALLED_FILE
+    local conf c winner=""
+    conf="$(sed -n 's/^Conflicts With *: *//p' <<<"$1")"
+    for c in $conf; do
+        c="${c%%[<=>]*}"
+        [[ -z $c || $c == None ]] && continue
+        if grep -qxF "$c" "$2"; then
+            winner="$c"
+        elif [[ -z $winner ]] && pacman -Qi -- "$c" &>/dev/null; then
+            winner="$c"
+        fi
+    done
+    [[ -n $winner ]] || return 1
+    printf '%s\n' "$winner"
+}
+
+# One transaction against the configured repos, its output captured to $1 so a
+# failure can be classified. OMARCHY_ALLOW_DIRECT_PACMAN: the omarchy package
+# installs a PreTransaction hook that aborts a direct pacman -Syu. pipefail is
+# set, so the pipeline reports pacman's status, not tee's.
+install_native() { # LOG ARGS...
+    local log="$1"
+    shift
+    if $DRY_RUN; then
+        run_root env OMARCHY_ALLOW_DIRECT_PACMAN=1 pacman -S --needed --noconfirm "$@"
+    else
+        run_root env OMARCHY_ALLOW_DIRECT_PACMAN=1 pacman -S --needed --noconfirm "$@" 2>&1 | tee "$log"
+    fi
+}
+
 stage_packages() {
     echo "--- packages ---"
-    local native=() foreign=() installed wanted pkg reason
+    local native=() foreign=() installed wanted pkg reason si=""
     [[ -f $BUNDLE/packages/explicit-native.txt ]] || {
         warn "bundle carries no package lists."
         record_stage packages SKIPPED
@@ -325,6 +403,8 @@ stage_packages() {
 
     installed="$WORK/installed.txt"
     pacman -Qq 2>/dev/null | sort >"$installed"
+    local TGT_REPOS=()
+    mapfile -t TGT_REPOS < <(target_repos)
 
     : >"$WORK/skipped-policy.txt"
     : >"$WORK/todo-native.txt"
@@ -337,9 +417,21 @@ stage_packages() {
             printf '%s\t%s\n' "$pkg" "$reason" >>"$WORK/skipped-policy.txt"
             continue
         fi
-        if pacman -Si "$pkg" &>/dev/null; then
+        # One pacman -Si per package answers both questions: is there a repo
+        # for this name here, and does it conflict with something installed?
+        si="$(pacman -Si "$pkg" 2>/dev/null || true)"
+        if [[ -n $si ]] && reason="$(installed_conflict "$si" "$installed")"; then
+            printf '%s\t%s\n' "$pkg" "conflicts with $reason, which is installed here; the importer never removes packages, so replace it by hand to switch" >>"$WORK/skipped-policy.txt"
+            continue
+        fi
+        if [[ -n $si ]]; then
             printf '%s\n' "$pkg" >>"$WORK/todo-native.txt"
         else
+            # No configured repo has this name. The bundle's recorded source
+            # repo is not consulted here: a chaotic-aur package can still be
+            # obtainable from the AUR (helium-browser-bin is), and only the
+            # helper can say. The table is used below, when a helper failure
+            # needs explaining.
             printf '%s\n' "$pkg" >>"$WORK/todo-foreign.txt"
         fi
     done < <(cat "$BUNDLE/packages/explicit-native.txt" "$BUNDLE/packages/explicit-foreign.txt" 2>/dev/null | sort -u)
@@ -373,10 +465,45 @@ stage_packages() {
 
     local failed=()
     if ((${#native[@]})); then
-        # OMARCHY_ALLOW_DIRECT_PACMAN: the omarchy package installs a
-        # PreTransaction hook that aborts any direct pacman -Syu.
-        if ! run_root env OMARCHY_ALLOW_DIRECT_PACMAN=1 pacman -S --needed --noconfirm -- "${native[@]}"; then
-            warn "the batch transaction failed; retrying package by package so one bad name does not block the rest."
+        local blog="$WORK/pacman-native.log" conflicts=() native_ok=false
+
+        # 1. The batch transaction, one go for all of them.
+        if install_native "$blog" -- "${native[@]}"; then
+            native_ok=true
+        else
+            # 2. A stale database is the commonest way this dies: the name is
+            #    in the DB while the file behind it has been rolled off the
+            #    mirror, so a dependency 404s (plan 044: mangohud through an
+            #    old python-matplotlib entry) and nothing is installed.
+            #    Refresh once and retry the same transaction, before demoting
+            #    it to one transaction per package.
+            echo "    the batch transaction failed; refreshing the package databases and retrying once."
+            run_root env OMARCHY_ALLOW_DIRECT_PACMAN=1 pacman -Sy 2>&1 ||
+                warn "the database refresh failed; retrying the transaction anyway."
+            if install_native "$blog" -- "${native[@]}"; then
+                native_ok=true
+            fi
+        fi
+
+        # 3. Files an earlier partial setup left behind. pacman refuses to
+        #    install over a path no package owns and names it; overwrite
+        #    exactly those paths and nothing else. (The wrapper's plan-043
+        #    sweep does the same for yaru-icon-theme vs /usr/share/icons/Yaru.)
+        if ! $native_ok; then
+            mapfile -t conflicts < <(sed -n 's/^[A-Za-z0-9@._+-]*: \(.*\) exists in filesystem$/\1/p' "$blog" | sort -u)
+            if ((${#conflicts[@]})); then
+                echo "    retrying with --overwrite for ${#conflicts[@]} file(s) no package owns:"
+                printf '        %s\n' "${conflicts[@]}"
+                if install_native "$blog" --overwrite "$(printf '%s,' "${conflicts[@]}" | sed 's/,$//')" -- "${native[@]}"; then
+                    native_ok=true
+                fi
+            fi
+        fi
+
+        # 4. One bad name must not block the rest. Last resort: a batch that
+        #    got this far without installing is rare.
+        if ! $native_ok; then
+            warn "the batch transaction still failed; retrying package by package so one bad name does not block the rest."
             for pkg in "${native[@]}"; do
                 run_root env OMARCHY_ALLOW_DIRECT_PACMAN=1 pacman -S --needed --noconfirm -- "$pkg" || failed+=("$pkg")
             done
@@ -398,10 +525,43 @@ stage_packages() {
         fi
     fi
 
+    # A helper failure for a package the bundle recorded as coming from a repo
+    # this machine does not configure — and that no configured repo has — is
+    # the bundle naming a machine-specific repo (chaotic-aur), not a broken
+    # package: nothing here configures chaotic mirrors, and an AUR package
+    # called chaotic-keyring does not exist. Report those as a policy skip that
+    # names the repo and keep them out of the failure list. A package the
+    # helper *can* obtain from the AUR is never pre-skipped for its recorded
+    # repo — helium-browser-bin and sway-audio-idle-inhibit-git are recorded as
+    # chaotic-aur on the source machine and install from the AUR here.
+    if ((${#failed[@]})); then
+        local still=() repo=""
+        for pkg in "${failed[@]}"; do
+            repo="$(bundle_repo_of "$pkg" || true)"
+            if [[ -n $repo && $repo != aur && $repo != unknown ]] &&
+                ! printf '%s\n' "${TGT_REPOS[@]}" | grep -qxF "$repo"; then
+                printf '    policy: %-28s %s\n' "$pkg" "source repo '$repo' is not configured here and no AUR package provides it"
+                if ! $DRY_RUN; then
+                    printf '%s\t%s\n' "$pkg" "bundle says it came from the '$repo' repo, which this machine does not configure, and the AUR helper could not provide it" >>"$REPORT_DIR/packages-skipped-by-policy.tsv"
+                fi
+                continue
+            fi
+            still+=("$pkg")
+        done
+        failed=("${still[@]}")
+    fi
+
     if ((${#failed[@]})); then
         printf '%s\n' "${failed[@]}" >"$REPORT_DIR/packages-failed.txt"
-        warn "${#failed[@]} packages did not install; see $REPORT_DIR/packages-failed.txt"
-        record_stage packages "PARTIAL (${#failed[@]} failed)"
+        warn "${#failed[@]} of ${wanted} package(s) did not install:"
+        printf '    failed: %s\n' "${failed[@]}"
+        echo "    the reason for each is in the output above; list: $REPORT_DIR/packages-failed.txt"
+        # A partial package stage is a failure, not a detail: the old
+        # "PARTIAL" wording matched neither the FAILED check below nor the
+        # doctor's, so a run with six packages missing exited 0 (plan 044).
+        # Policy skips never reach this list — they are printed with their
+        # reason and counted in packages-skipped-by-policy.tsv.
+        record_stage packages "FAILED (${#failed[@]} of ${wanted} did not install)"
     else
         record_stage packages OK
     fi

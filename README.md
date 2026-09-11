@@ -539,6 +539,8 @@ units you enabled. Three scripts carry that across:
 bin/omocachy-profile-export.sh --out /run/media/usb --archive
 
 # 2. on the CachyOS machine, AFTER bin/install-omarchy-quattro.sh
+#    Copy BOTH the archive and its .sha256 there: the importer verifies the
+#    digest before it unpacks anything.
 bin/omocachy-profile-import.sh --bundle /run/media/usb/omocachy-profile-<host>-<ts>.tar.zst --dry-run
 bin/omocachy-profile-import.sh --bundle /run/media/usb/omocachy-profile-<host>-<ts>.tar.zst
 
@@ -552,8 +554,9 @@ bin/omocachy-doctor.sh --bundle /run/media/usb/omocachy-profile-<host>-<ts>.tar.
 or pass `--paths FILE`): `~/.config/omarchy`, `~/.config/hypr`, `uwsm`, the
 shells (fish/bash), `mise`, terminals and TUI config, `~/.config/systemd/user`,
 `~/.local/bin`. Alongside the payload the bundle records the explicit package
-list (native and foreign/AUR separately), your mise tools, the enabled user
-units, and a plugin table — id, whether it has a git remote, and which commit.
+list (native and foreign/AUR separately, each with the repository it came
+from), your mise tools, the enabled user units, and a plugin table — id,
+whether it has a git remote, and which commit.
 
 What it deliberately does not contain: credential stores (`~/.ssh`,
 `~/.gnupg`, `~/.config/gh`, ...), regenerable state (mise runtimes, caches,
@@ -562,7 +565,9 @@ documents. A profile bundle is not a backup tool.
 
 `--slim` drops theme wallpapers (on the maintainer's machine: 520 MB of
 themes down to 348 MB). `--archive` also writes a `.tar.zst` plus `.sha256`
-for transport.
+for transport. **Carry both files to the target**: the importer checks the
+digest before it unpacks anything, and if the `.sha256` stayed behind it can
+only warn that the bundle could not be verified.
 
 **Treat a bundle as sensitive.** Plugin settings live in `shell.json`, API
 keys included, so the bundle directory is created `0700` and the archive
@@ -594,10 +599,22 @@ Stages, selectable with `--only`/`--skip`: `configs`, `packages`, `mise`,
   base-system packages, `cachyos-*` metapackages and `tldr` are never
   installed by the importer — the first three because they are boot- or
   driver-critical and belong to your CachyOS install and `chwd`, the rest
-  because the installer or CachyOS already provides them. Each skip is
-  printed with its reason. Everything else is installed from your configured
-  repos in one pacman transaction, with names no repo has routed to
-  `paru`/`yay`; failures are reported, never silent.
+  because the installer or CachyOS already provides them. Two rules use what
+  the target already has: a package that conflicts with one installed here is
+  skipped, naming the target's package and never removing it (`pipewire-jack`
+  against CachyOS's `jack2`, `mise-bin` against an installed `mise`), and a
+  package whose recorded source repository this machine does not configure is
+  skipped, naming the repository — a bundle from a machine with `chaotic-aur`
+  installs no chaotic package here. Each skip is printed with its reason and
+  listed in `packages-skipped-by-policy.tsv`. Everything else is installed
+  from your configured repos in one pacman transaction. If that fails, the
+  importer refreshes the databases once and retries the same transaction, then
+  — when pacman named files no package owns — retries once more with
+  `--overwrite` limited to exactly those paths, and only then falls back to
+  one package at a time. Names no configured repo has go to `paru`/`yay`.
+  Failures are reported with their reason in the output, listed in
+  `packages-failed.txt`, and **fail the run**: a partial package stage exits
+  non-zero instead of reporting success.
 - **Offline is handled.** With no network the `packages` and `mise` stages
   skip and leave their lists in
   `~/.local/state/omocachy/reports/import-<ts>/`; re-run later with
