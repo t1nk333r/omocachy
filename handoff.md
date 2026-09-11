@@ -129,8 +129,14 @@ systemd initramfs).
 - **Fixture matrix** (`tests/run.sh`): the HOOKS merge for both initramfs
   flavours and its refusal path, a dry run against six sysroot fixtures,
   and a dry-run purity check with failing command stubs.
-- **systemd-boot** and **real GPUs**: fixtures / dry-run only (the guest has
-  no GPU). The dev machine (AMD) can exercise `amd-rocm.sh` for real.
+- **systemd-boot** and **real GPUs**: systemd-boot and `nvidia.sh` are
+  fixtures/dry-run only (the guest has no GPU, the dev machine no NVIDIA
+  card). **`amd-rocm.sh` has run for real**: on the dev machine (AMD RX 7900
+  XTX, Omarchy-on-Arch, 2026-09-11) detection, the chwd-skip warning, the
+  package transaction (`rocm-language-runtime rocm-cmake rocm-hip-runtime
+  libva-utils`; four fresh installs, no upgrades) and the session-env write
+  all succeeded, with `vainfo` on Mesa radeonsi, RADV enumerating the card
+  and `rocm-smi` reading it afterwards.
 - **Omarchy 4.0.3** (dev host, 2026-09-11): the installed release has moved
   off the 4.0.2 the reconciliation was verified against, and the wrapper now
   warns on that drift (`OMARCHY_RECONCILED_VERSION`). Not a defect — the
@@ -155,8 +161,10 @@ systemd initramfs).
    as your user), and a `--skip-user-configs` run on a fresh guest.
 2. **systemd-boot CachyOS install** — fixtures only; GRUB and Limine (with
    and without LUKS2) have run for real.
-3. **Real GPUs** — `nvidia.sh`/`amd-rocm.sh` are dry-run only; the dev
-   machine (AMD) can run `amd-rocm.sh` for real.
+3. **Real GPUs** — `nvidia.sh` has never run against hardware (dry-run and
+   stubs only); `amd-rocm.sh` ran for real on the dev machine (AMD RX 7900
+   XTX) on 2026-09-11 with every step succeeding (plan 036). The remaining
+   gap is NVIDIA hardware.
 4. **`omarchy-settings` upgrade through the preserve hook** — installed and
    the first-install restore verified; no upgrade transaction has fired the
    hook yet.

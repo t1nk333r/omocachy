@@ -9,6 +9,13 @@
 - **Category**: bug
 - **Planned at**: commit `70bbade`, 2026-09-11
 - **Executed**: 2026-09-11, in the same commit as this file (reviewer pass).
+  The real-device half of release gate 3 followed the same evening:
+  `bin/amd-rocm.sh` ran for real on the dev machine (AMD RX 7900 XTX) —
+  detection, the chwd-skip warning, the package transaction
+  (`rocm-language-runtime rocm-cmake rocm-hip-runtime libva-utils`; four
+  fresh installs, no upgrades) and the session-env write all succeeded;
+  `vainfo` reports Mesa radeonsi on the GPU, `vulkaninfo` enumerates it via
+  RADV, `rocm-smi` reads it, and Mesa/RADV/firmware were untouched.
 
 ## Why this matters
 
