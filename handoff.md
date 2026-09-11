@@ -97,6 +97,14 @@ root-equivalent; secrets in `.env`, unrecoverable, never commit or print):
   `JENKINS_AGENT_SECRET`**; fix = copy a fresh secret from Manage Jenkins →
   Nodes → docker-host into `.env`, `docker compose up -d jenkins-agent`.
   Until then, pushes queue no CI; the local lint gate is the only check.
+  **Correction (2026-09-11):** `~/Documents/gh-runner/` does **not** exist on
+  luna any more (no directory under `~`, no `JENKINS_AGENT_SECRET` anywhere in
+  `~/Documents`, `~/.config`, `~/Projects`, no runner containers beyond the
+  labs' own) — the stack lives on whichever host holds the docker socket for
+  that agent. The controller itself answers (`curl -o /dev/null -w '%{http_code}'
+  http://10.10.10.62:8080/` → 403, i.e. up and unauthenticated). So the fix is
+  three steps on that host, none of which this repo can do for itself: fresh
+  secret from the Jenkins UI → `.env` → `docker compose up -d jenkins-agent`.
 - The repo's `Jenkinsfile` is a faithful port of the old lint workflow
   (agent label `docker`; `Dockerfile.agent` already ships shellcheck).
 
@@ -206,8 +214,11 @@ systemd initramfs).
    packages installed.
 3. **Real GPUs** — `amd-rocm.sh` ran for real on the dev machine 2026-09-11
    (plan 036: four packages plus the env file, `vainfo`/`rocm-smi`/`vulkaninfo`
-   on the card, graphics stack untouched); `nvidia.sh` stays dry-run only (no
-   NVIDIA hardware in the lab).
+   on the card, graphics stack untouched). **`nvidia.sh` is out of scope for
+   this setup** and stays code-reviewed-only: there is no NVIDIA hardware on
+   luna, and the station is AMD too (the profile bundle exported 2026-09-11
+   records `GPU vendor | amd`). If an NVIDIA machine ever appears, that gate
+   half is one `bin/nvidia.sh` run plus the browser-decode notes in README §5.1.
 4. **`omarchy-settings` upgrade through the preserve hook** — installed and
    the first-install restore verified; no upgrade transaction has fired the
    hook yet.
