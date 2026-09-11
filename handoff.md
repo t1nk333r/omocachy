@@ -265,19 +265,24 @@ systemd initramfs).
 7. Backlog: opt-in debloat prompt inside the wrapper;
    `--restore-host-specific`; lab hardening (fixed 90 s wait, typed launch
    line) and merging the lab's `cachyos-guest` branch.
-8. **Secure Boot** — CachyOS supports it (its installer can set it up; Limine
-   with `ENABLE_UKI=yes` and `sbctl`-signed artefacts on a CachyOS host), and
-   nothing in this repo manages or disables it: the wrapper preserves an
-   existing `ENABLE_UKI`/`BOOT_ORDER`/`TARGET_OS_NAME` in `/etc/default/limine`
-   and only writes them when they are absent. But **no run has happened on a
-   Secure Boot machine**, and the installer rebuilds the initramfs
-   (`/usr/bin/mkinitcpio -P`, or `limine-mkinitcpio`) — after which anything
-   signed must be signed again. Validate on a Secure Boot host: `sbctl` present
-   and enrolled, run the wrapper, then `sbctl verify` (with `sbctl sign-all` if
-   it reports unsigned files), `bootctl status`, and a boot entry comparison;
-   the suite itself has no Secure Boot check yet (a candidate plan: report
-   `sbctl status`/`mokutil --sb-state` and assert the pre-run state is
-   unchanged).
+8. **Secure Boot — validated in a lab 2026-09-11; no longer hardware-blocked.**
+   The runner's `edk2-ovmf` ships `OVMF_CODE.secboot.4m.fd`, so a lab copy boots
+   into pristine UEFI Setup Mode with a one-line firmware swap (the VARS
+   template is shared; `smm=on` + `pflash01.secure=on` are optional hardening).
+   With keys enrolled (`sbctl create-keys`, `enroll-keys --microsoft`), Secure
+   Boot enforcing and the EFI loaders signed, a full wrapper run finishes
+   `wrapper-exit=0` with **19 PASS / 0 FAIL / 0 SKIP**, reboots with
+   `Secure Boot: enabled (user)` and stays green. Two traps recorded: (a)
+   Omarchy's `limine-install` overwrites the *removable-media fallback* loader
+   `/boot/EFI/BOOT/BOOTX64.EFI` with the unsigned packaged binary on every
+   seeding run — the wrapper now re-signs it when `sbctl status` reports Secure
+   Boot enabled (`226fa38`, after the lab verification caught the gate regex
+   being defeated by sbctl's `Secure Boot:\t✓ Enabled` check-mark glyph); (b)
+   never sign the `/boot/<machine-id>/**/vmlinuz` copies on a non-UKI Limine
+   host — Limine pins their BLAKE2b hash in `limine.conf` and signing them ends
+   in `PANIC: Blake2b hash … does not match`. Not yet tested: an SB machine
+   whose bootloader was chosen by an installer (this was Limine from the
+   golden), and UKI-mode Secure Boot.
 
 ## Fast orientation for an agent
 
