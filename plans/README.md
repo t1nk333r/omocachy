@@ -80,6 +80,8 @@ lines in this header were corrected at the same time (see the branch note).
 | 033 | GPU scripts: strict flag parsing, `default:` dispatch branch, reachable no-AMD guard | P3 | S | after 019 | DONE (a40a4bb; strict flags, dispatch default branch, reachable no-AMD guard, `OMOCACHY_GPU_TYPE` seam; pre-fix failures shown) |
 | 034 | `tests/run.sh` lint: fail when shellcheck is missing; align with the documented `-x`/warning gate | P3 | S | — | DONE (488835c; missing shellcheck FAILs, warning-severity `-x`, `SHELLCHECK_BIN`/`OMOCACHY_SKIP_SHELLCHECK`) |
 
+| 035 | Deduplicate the GPU scripts' boilerplate into `bin/lib/common.sh` (`parse_dry_run_flag`, `write_gpu_session_env`) | P3 | S | — | DONE (this commit; byte-identical output for all three scripts, lint + 245 tests green) |
+
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) |
 REJECTED (with one-line rationale)
 
@@ -191,3 +193,7 @@ if any of these merge upstream, reconcile rather than duplicate:
 - **Directions not planned in this batch**: a `$HOME` test seam for the
   profile trio, and an opt-in debloat step inside the wrapper — both remain
   backlog items in `handoff.md`.
+- **Cleanup-pass rejections (plan 035)**: splitting the 1725-line wrapper into
+  libraries, converting the debloat picker's integer `DRY_RUN`, and the
+  doctor's SC2015 idiom — see `plans/035-cleanup-gpu-boilerplate.md`
+  §Considered and rejected for the reasoning.

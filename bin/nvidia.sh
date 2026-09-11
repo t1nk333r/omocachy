@@ -16,23 +16,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=bin/lib/common.sh
 source "$SCRIPT_DIR/lib/common.sh"
 
-# --dry-run is the only flag. Anything else is a typo: testing $1 alone would
-# ignore a misordered flag and silently take the privileged path.
 DRY_RUN=false
-for arg in "$@"; do
-    case "$arg" in
-    --dry-run) DRY_RUN=true ;;
-    -h | --help)
-        echo "Usage: $(basename "$0") [--dry-run]"
-        exit 0
-        ;;
-    *)
-        echo "Unknown argument: $arg" >&2
-        echo "Usage: $(basename "$0") [--dry-run]" >&2
-        exit 1
-        ;;
-    esac
-done
+parse_dry_run_flag "$@"
 
 # Exit early if no NVIDIA GPU is present
 if ! lspci -nn -d 10de: | grep -qE "VGA|3D"; then
@@ -126,13 +111,9 @@ EOF
     info "Wrote /etc/modprobe.d/nvidia-modeset.conf (rebuild the initramfs to apply)."
 fi
 
-# Session environment for the NVIDIA driver. ~/.config/uwsm/env is the user's
-# own file (often dotfile-managed), so it is never appended to. uwsm also
-# sources ~/.config/uwsm/env.d/* (uwsm(1) CONFIGURATION: "uwsm/env,
-# uwsm/env.d/*"), which gives this script a file it owns outright and can
-# rewrite on re-runs. OMOCACHY_SKIP_USER_CONFIGS=1 (install-omarchy-quattro.sh
-# --skip-user-configs) means $HOME is off limits: print the lines instead.
-GPU_ENV_FILE="$HOME/.config/uwsm/env.d/50-omocachy-gpu"
+# Session environment for the NVIDIA driver: the file it lands in, the
+# skip-user-configs behaviour and the dry-run handling live in
+# write_gpu_session_env (bin/lib/common.sh).
 GPU_ENV_CONTENT='# Written by omocachy bin/nvidia.sh (NVIDIA)
 export LIBVA_DRIVER_NAME=nvidia
 export GBM_BACKEND=nvidia-drm
@@ -140,12 +121,6 @@ export __GLX_VENDOR_LIBRARY_NAME=nvidia
 export NVD_BACKEND=direct
 export MOZ_DISABLE_RDD_SANDBOX=1
 export CUDA_DISABLE_PERF_BOOST=1'
-if [[ ${OMOCACHY_SKIP_USER_CONFIGS:-0} == 1 ]]; then
-    info "--skip-user-configs: not writing $GPU_ENV_FILE. Recommended session environment (add to your own uwsm env or env.d file):"
-    printf '%s\n' "$GPU_ENV_CONTENT"
-else
-    printf '%s\n' "$GPU_ENV_CONTENT" | write_user_file "$GPU_ENV_FILE"
-    info "NVIDIA session environment written to $GPU_ENV_FILE"
-fi
+write_gpu_session_env "NVIDIA" "$GPU_ENV_CONTENT"
 
 info "NVIDIA configuration complete."

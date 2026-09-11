@@ -13,6 +13,29 @@ OMOCACHY_COMMON_SH=1
 # Scripts set this from their own --dry-run flag before calling the helpers.
 DRY_RUN=${DRY_RUN:-false}
 
+# parse_dry_run_flag "$@" — the standard flag set for the small GPU scripts:
+# --dry-run anywhere sets DRY_RUN=true, -h/--help prints usage, and anything
+# else is refused with usage on stderr. Parsing every argument (not just $1)
+# is what keeps a misplaced flag from silently taking the privileged path.
+# Callers that only forward the flag (gpu-setup.sh) ignore the variable.
+parse_dry_run_flag() {
+    local arg
+    for arg in "$@"; do
+        case "$arg" in
+        --dry-run) DRY_RUN=true ;;
+        -h | --help)
+            echo "Usage: $(basename "$0") [--dry-run]"
+            exit 0
+            ;;
+        *)
+            echo "Unknown argument: $arg" >&2
+            echo "Usage: $(basename "$0") [--dry-run]" >&2
+            exit 1
+            ;;
+        esac
+    done
+}
+
 run() {
     if $DRY_RUN; then
         echo "DRYRUN: $*"
@@ -60,6 +83,26 @@ write_user_file() {
     else
         mkdir -p "$(dirname "$dest")"
         cat >"$dest"
+    fi
+}
+
+# The session-environment file both GPU scripts write. ~/.config/uwsm/env is
+# the user's own file (often dotfile-managed) and is never appended to; uwsm
+# also sources env.d/* (uwsm(1) CONFIGURATION: "uwsm/env, uwsm/env.d/*"),
+# which gives the scripts a file they own outright and can rewrite on re-runs.
+OMOCACHY_GPU_ENV_FILE="$HOME/.config/uwsm/env.d/50-omocachy-gpu"
+
+# write_gpu_session_env LABEL CONTENT — write the vendor's session
+# environment, or print it under OMOCACHY_SKIP_USER_CONFIGS=1, where $HOME is
+# off limits. LABEL names the vendor in the confirmation line ("NVIDIA").
+write_gpu_session_env() {
+    local label="$1" content="$2"
+    if [[ ${OMOCACHY_SKIP_USER_CONFIGS:-0} == 1 ]]; then
+        info "--skip-user-configs: not writing $OMOCACHY_GPU_ENV_FILE. Recommended session environment (add to your own uwsm env or env.d file):"
+        printf '%s\n' "$content"
+    else
+        printf '%s\n' "$content" | write_user_file "$OMOCACHY_GPU_ENV_FILE"
+        info "$label session environment written to $OMOCACHY_GPU_ENV_FILE"
     fi
 }
 

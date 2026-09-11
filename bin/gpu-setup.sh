@@ -10,21 +10,11 @@ set -euo pipefail
 #                                        this value (see tests/run.sh)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=bin/lib/common.sh
+source "$SCRIPT_DIR/lib/common.sh"
 
-for arg in "$@"; do
-    case "$arg" in
-    --dry-run) ;; # forwarded to the vendor script below
-    -h | --help)
-        echo "Usage: $(basename "$0") [--dry-run]"
-        exit 0
-        ;;
-    *)
-        echo "Unknown argument: $arg" >&2
-        echo "Usage: $(basename "$0") [--dry-run]" >&2
-        exit 1
-        ;;
-    esac
-done
+# --dry-run only; the vendor script re-parses the flag itself.
+parse_dry_run_flag "$@"
 
 GPU_TYPE="${OMOCACHY_GPU_TYPE:-$(bash "$SCRIPT_DIR/gpu-detect.sh")}"
 

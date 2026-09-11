@@ -10,23 +10,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=bin/lib/common.sh
 source "$SCRIPT_DIR/lib/common.sh"
 
-# --dry-run is the only flag. Anything else is a typo: testing $1 alone would
-# ignore a misordered flag and silently take the privileged path.
 DRY_RUN=false
-for arg in "$@"; do
-    case "$arg" in
-    --dry-run) DRY_RUN=true ;;
-    -h | --help)
-        echo "Usage: $(basename "$0") [--dry-run]"
-        exit 0
-        ;;
-    *)
-        echo "Unknown argument: $arg" >&2
-        echo "Usage: $(basename "$0") [--dry-run]" >&2
-        exit 1
-        ;;
-    esac
-done
+parse_dry_run_flag "$@"
 
 # 1. Get AMD GPU ID. The pipeline exits non-zero on a host with no AMD GPU
 # (grep finds nothing), which under pipefail aborted this script before its own
@@ -52,21 +37,11 @@ run_root chwd -i amd
 info "Installing ROCm and VA-API packages..."
 run_root pacman -S --needed --noconfirm rocm-core rocm-hip-runtime rocm-smi-lib libva-utils
 
-# 5. Session environment for ROCm. ~/.config/uwsm/env is the user's own file
-# (often dotfile-managed), so it is never appended to. uwsm also sources
-# ~/.config/uwsm/env.d/* (uwsm(1) CONFIGURATION: "uwsm/env, uwsm/env.d/*"),
-# which gives this script a file it owns outright and can rewrite on re-runs.
-# OMOCACHY_SKIP_USER_CONFIGS=1 (install-omarchy-quattro.sh --skip-user-configs)
-# means $HOME is off limits: print the lines for the user to place themselves.
-GPU_ENV_FILE="$HOME/.config/uwsm/env.d/50-omocachy-gpu"
+# 5. Session environment for ROCm: the file it lands in, the
+# skip-user-configs behaviour and the dry-run handling live in
+# write_gpu_session_env (bin/lib/common.sh).
 GPU_ENV_CONTENT='# Written by omocachy bin/amd-rocm.sh (AMD ROCm)
 export LIBVA_DRIVER_NAME=radeonsi
 export ROCM_HOME=/opt/rocm
 export PATH=$ROCM_HOME/bin:$PATH'
-if [[ ${OMOCACHY_SKIP_USER_CONFIGS:-0} == 1 ]]; then
-    info "--skip-user-configs: not writing $GPU_ENV_FILE. Recommended session environment (add to your own uwsm env or env.d file):"
-    printf '%s\n' "$GPU_ENV_CONTENT"
-else
-    printf '%s\n' "$GPU_ENV_CONTENT" | write_user_file "$GPU_ENV_FILE"
-    info "AMD ROCm session environment written to $GPU_ENV_FILE"
-fi
+write_gpu_session_env "AMD ROCm" "$GPU_ENV_CONTENT"
