@@ -135,6 +135,13 @@ if ! mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null || ! touch "$LOG_FILE" 2>/dev
 fi
 exec > >(tee -a "$LOG_FILE") 2>&1
 
+# omarchy-apply-system points its own log here, so a failure inside one of its
+# stages leaves THIS log empty and the reason only there. Read through the
+# sysroot seam; the offset is the line count before this run's apply, so old
+# runs in the same file are never reported as this run's failure.
+APPLY_LOG="$(host_path /var/log/omarchy-install.log)"
+APPLY_LOG_SEEN=0
+
 CURRENT_STEP="startup"
 step() {
     CURRENT_STEP="$1"
@@ -162,6 +169,21 @@ diagnose_failure() {
     printf '  %s\n' "$matches" >&2
 }
 
+# omarchy-apply-system's stages log to $APPLY_LOG, not to this script's log, and
+# it aborts with the stage's exit code only. Report the stages that failed
+# since this run started: "Failed: /usr/share/omarchy/install/config/x.sh
+# (exit code: N)" names the culprit without any further digging.
+diagnose_apply_log() {
+    local matches
+    [[ -s $APPLY_LOG ]] || return 0
+    matches="$(tail -n +"$((APPLY_LOG_SEEN + 1))" "$APPLY_LOG" 2>/dev/null |
+        grep -E 'Failed: .*\(exit code' | tail -5 || true)"
+    [[ -n $matches ]] || return 0
+    echo "" >&2
+    echo "-- omarchy-apply-system stage failures (from $APPLY_LOG) --" >&2
+    printf '  %s\n' "$matches" >&2
+}
+
 on_err() {
     local rc="$1" line="$2"
     trap - ERR
@@ -178,6 +200,7 @@ on_err() {
     echo "" >&2
     echo "Error: aborted at line $line (exit $rc) during step: $CURRENT_STEP" >&2
     diagnose_failure
+    diagnose_apply_log
     echo "" >&2
     echo "Full log: $LOG_FILE" >&2
     exit "$rc"
@@ -1394,11 +1417,44 @@ else
     decide ufw_ssh "no-sshd"
 fi
 
+step "Snapper (re-apply safety)"
+
+# install/config/snapper.sh (inside apply-system) runs
+# `snapper -c root create-config /` only when /etc/snapper/configs/root is
+# absent — but that call FAILS when the /.snapshots subvolume already exists,
+# which is the state of a machine whose config went away while the subvolume
+# stayed (CachyOS pre-creates .snapshots; the config can be moved aside or
+# removed). apply-system then aborts with exit 1 and no console output at all.
+# Everything that stage does after the failing call is install Omarchy's
+# template config, so writing the template is exactly the state a successful
+# run leaves behind — no upstream behaviour is skipped, only the call that
+# cannot succeed.
+SNAPPER_CONFIG="$(host_path /etc/snapper/configs/root)"
+SNAPPER_TEMPLATE="$(host_path /usr/share/omarchy/default/snapper/root)"
+SNAPPER_LIST="$(host_path /etc/conf.d/snapper)"
+if [[ -d $(host_path /.snapshots) && ! -f $SNAPPER_CONFIG && -f $SNAPPER_TEMPLATE ]]; then
+    echo "The /.snapshots subvolume exists but $SNAPPER_CONFIG does not: Omarchy's"
+    echo "snapper stage would abort on 'snapper create-config' there. Writing Omarchy's"
+    echo "own template config first, the state that stage ends in, so apply can proceed."
+    if $DRY_RUN; then
+        echo "DRYRUN: install Omarchy's snapper template config to $SNAPPER_CONFIG"
+    else
+        run_root install -D -m 0644 "$SNAPPER_TEMPLATE" "$SNAPPER_CONFIG"
+        printf '%s\n' 'SNAPPER_CONFIGS="root"' | run_root tee "$SNAPPER_LIST" >/dev/null
+    fi
+    decide snapper_reapply "template-written"
+else
+    decide snapper_reapply "not-needed"
+fi
+
 # ---------------------------------------------------------------------------
 # Apply
 # ---------------------------------------------------------------------------
 
 step "Running omarchy-apply-system"
+if [[ -f $APPLY_LOG ]]; then
+    APPLY_LOG_SEEN="$(wc -l <"$APPLY_LOG")"
+fi
 run_root omarchy-apply-system --install-user "$USER" --first-install
 
 # ---------------------------------------------------------------------------
@@ -1690,6 +1746,39 @@ step "Bootloader reconciliation"
 # stop limine-snapper-sync on machines Limine does not boot.
 if [[ $BOOTLOADER != "limine" ]]; then
     run_root systemctl disable --now limine-snapper-sync.service
+
+    # Omarchy's snapper stage enables that service moments earlier in this run
+    # (install/config/snapper.sh: `systemctl enable --now ... limine-snapper-sync
+    # .service`), and it writes Limine's config and a Limine UKI while it is up.
+    # The PATH shim in /usr/local/bin/mkinitcpio wrote the same pair on every
+    # kernel transaction before this script's hook policy landed. The assertion
+    # suite requires /boot to be free of both, so move them aside — recoverable,
+    # like the Limine branch's own backup of the config it rewrites.
+    LIMINE_ARTIFACTS=()
+    if [[ -e $(host_path /boot/limine.conf) ]]; then
+        LIMINE_ARTIFACTS+=("$(host_path /boot/limine.conf)")
+    fi
+    if [[ -e $(host_path /boot/limine.conf.old) ]]; then
+        LIMINE_ARTIFACTS+=("$(host_path /boot/limine.conf.old)")
+    fi
+    shopt -s nullglob
+    for uki in "$(host_path /boot)"/EFI/Linux/omarchy_*.efi; do
+        LIMINE_ARTIFACTS+=("$uki")
+    done
+    shopt -u nullglob
+    if ((${#LIMINE_ARTIFACTS[@]})); then
+        for artifact in "${LIMINE_ARTIFACTS[@]}"; do
+            if $DRY_RUN; then
+                echo "DRYRUN: move $artifact to $artifact.$BACKUP_SUFFIX"
+            else
+                run_root mv "$artifact" "$artifact.$BACKUP_SUFFIX"
+                echo "Moved $artifact aside: Limine does not boot this $BOOTLOADER machine."
+            fi
+        done
+        decide limine_artifacts "moved-aside"
+    else
+        decide limine_artifacts "none"
+    fi
 fi
 apply_boot_hook_policy
 
