@@ -91,8 +91,8 @@ the confirmation prompt (safe to combine with `--dry-run`).
 
 **Three more flags:**
 
-- `--skip-user-configs` keeps the wrapper out of `$HOME` entirely. It skips,
-  by name:
+- `--skip-user-configs` keeps the wrapper out of `$HOME` entirely (its own
+  transcript goes to `/tmp`). It skips, by name:
   - the `/etc/skel` replay — `omarchy-reinstall-configs`, which is
     `cp -af /etc/skel/. ~/` and would overwrite a dotfiles checkout;
   - `omarchy-refresh-limine`, which `omarchy-reinstall-configs` calls and
@@ -114,7 +114,8 @@ the confirmation prompt (safe to combine with `--dry-run`).
   abort the whole seeding step.)
 - `--autologin` writes `/etc/sddm.conf.d/autologin.conf` for your user
   (Omarchy's ISO default). Off by default.
-- `--verify-only` runs just the read-only assertion suite and exits.
+- `--verify-only` runs just the read-only assertion suite and exits. It
+  installs and changes nothing, so its transcript goes to `/tmp` as well.
 
 **What the wrapper does:**
 
@@ -334,7 +335,7 @@ disabled there; `/etc/default/limine` carrying the `ENABLE_UKI`/`BOOT_ORDER`
 backup; the update-guard hook installed; and the `omarchy` CLI present.
 
 Run that suite again at any time with `--verify-only`, which installs and
-changes nothing:
+changes nothing (its transcript goes to `/tmp`):
 
 ```bash
 bin/install-omarchy-quattro.sh --verify-only     # e.g. after `omarchy update`
@@ -358,8 +359,11 @@ for its own re-runs. After your first `omarchy update`, run
 `--verify-only`: that is when a migration or an `omarchy-settings` upgrade
 would take the CachyOS repos, `os-release` or the boot hooks back out.
 
-**Every run is logged** to `~/.local/state/omocachy/install-<timestamp>.log`
-(override with `OMOCACHY_LOG`). On an unexpected abort the ERR trap names the
+**Every run is logged.** A real install writes
+`~/.local/state/omocachy/install-<timestamp>.log`. `--dry-run`,
+`--verify-only` and `--skip-user-configs` promise to leave `$HOME` alone, so
+they log to `/tmp/omocachy-install-<timestamp>.log` instead. Either path is
+overridable with `OMOCACHY_LOG`. On an unexpected abort the ERR trap names the
 step and scans that log for the failure patterns worth reading.
 
 **Testing without CachyOS.** `tests/run.sh` runs the whole suite on any

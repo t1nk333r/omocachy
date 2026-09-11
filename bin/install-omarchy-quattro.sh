@@ -155,7 +155,13 @@ done
 # _diagnose_failure). Its rsync-over-/usr/share/omarchy model is not reused:
 # that path is pacman-owned on 4.x.
 # ---------------------------------------------------------------------------
-LOG_FILE="${OMOCACHY_LOG:-${XDG_STATE_HOME:-$HOME/.local/state}/omocachy/install-$TIMESTAMP.log}"
+if $DRY_RUN || $VERIFY_ONLY || $SKIP_USER_CONFIGS; then
+    # These modes promise to leave $HOME alone (README) and to change nothing
+    # (dry-run contract). Keep the transcript, but outside $HOME.
+    LOG_FILE="${OMOCACHY_LOG:-/tmp/omocachy-install-$TIMESTAMP.log}"
+else
+    LOG_FILE="${OMOCACHY_LOG:-${XDG_STATE_HOME:-$HOME/.local/state}/omocachy/install-$TIMESTAMP.log}"
+fi
 if ! mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null || ! touch "$LOG_FILE" 2>/dev/null; then
     LOG_FILE="/tmp/omocachy-install-$TIMESTAMP.log"
     touch "$LOG_FILE"
