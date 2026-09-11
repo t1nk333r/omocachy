@@ -32,7 +32,7 @@ Adopted from it:
 | Idea | Where it landed | Why |
 |---|---|---|
 | NVIDIA generation probe from the PCI device id, with an open-GSP capability flag | `bin/nvidia.sh` | Detects the one silent misconfiguration our detect-and-respect logic could not see: an `nvidia-open*` package on a pre-Turing card, which has no GSP firmware and never initialises. We report and warn; package *choice* stays with `chwd`, which has its own device-id table (plan 007). |
-| `nvidia-vaapi-driver` alongside `libva-utils` | `bin/nvidia.sh` | We already export `LIBVA_DRIVER_NAME=nvidia`; without that package the variable points at nothing and browsers silently fall back to software decode. |
+| `libva-nvidia-driver` alongside `libva-utils` (corrected 2026-09-11: the package is `libva-nvidia-driver`) | `bin/nvidia.sh` | We already export `LIBVA_DRIVER_NAME=nvidia`; without that package the variable points at nothing and browsers silently fall back to software decode. |
 | `options nvidia_drm modeset=1 fbdev=1` drop-in | `bin/nvidia.sh` | Required for Wayland. Written only when nothing in `/etc/modprobe.d` already sets it, so an existing CachyOS choice wins. |
 | Tee'ing a run's output to a log file | `start_logging` in `bin/lib/common.sh` | A migration is long and unattended; a transcript is worth having. |
 

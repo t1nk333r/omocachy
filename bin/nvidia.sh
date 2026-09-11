@@ -71,8 +71,10 @@ if [[ -n $NVIDIA_DRIVER ]]; then
     DRIVER_VERSION=$(pacman -Q "$NVIDIA_DRIVER" 2>/dev/null | awk '{print $2}')
     info "Active NVIDIA driver found: $NVIDIA_DRIVER $DRIVER_VERSION"
     info "Respecting existing CachyOS driver installation."
-    if ! $SUPPORTS_OPEN_GSP && pacman -Qq | grep -q '^nvidia-open'; then
-        warn "an open kernel module package is installed but this GPU ($ARCH_NAME) has no GSP firmware support; it will not initialise. Switch to the proprietary branch (e.g. 'sudo chwd -i nvidia')."
+    if ! $SUPPORTS_OPEN_GSP && pacman -Qq | grep -qE '^nvidia-open|^linux-.*-nvidia-open$'; then
+        # chwd has no plain "nvidia" profile (plan 007): the proprietary branch
+        # for a pre-Turing card is the generation-versioned one.
+        warn "an open kernel module package is installed but this GPU ($ARCH_NAME) has no GSP firmware support; it will not initialise. Switch to the proprietary branch (Pascal: 'sudo chwd -i nvidia-dkms-580xx', Maxwell: 'sudo chwd -i nvidia-dkms-470xx')."
     fi
 else
     info "No NVIDIA driver detected — installing via chwd..."
@@ -93,7 +95,7 @@ fi
 # NVIDIA VA-API driver that LIBVA_DRIVER_NAME=nvidia below selects — without
 # it that variable points at nothing and browsers fall back to software
 # decode (adopted from jeanmartins7/omarchy-on-cachyos).
-run_root pacman -S --needed --noconfirm libva-utils nvidia-vaapi-driver
+run_root pacman -S --needed --noconfirm libva-utils libva-nvidia-driver
 
 # DRM kernel mode setting is required for Wayland. Recent drivers default to
 # modeset=1, and CachyOS may already ship a drop-in; only write one when

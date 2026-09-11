@@ -19,7 +19,7 @@ new machine:
 | v4 per-item debloat picker | `bin/debloat-quattro.sh` | Built, mock-verified, needs real-v4 TUI run |
 | Profile migration (export → import → doctor) | `bin/omocachy-profile-export.sh`, `bin/omocachy-profile-import.sh`, `bin/omocachy-doctor.sh` | Plan 018. Exercised end to end for real in the Omarchy lab VM (export, import onto a pristine guest, screenshot of the migrated desktop, `./lab test` green, rollback, re-import); the `packages` and `mise` stages ran online against a real CachyOS guest |
 | Shared helpers | `bin/lib/common.sh`, `bin/lib/profile.sh`, `share/profile-paths.conf` | `common.sh` is the dry-run contract shared by the profile scripts; `profile.sh` owns bundle schema 1 and the exclude/secret/package policies |
-| GPU dispatch | `bin/gpu-detect.sh` → `gpu-setup.sh` → `nvidia.sh`/`amd-rocm.sh` | Working; NVIDIA probes the PCI id for the generation and warns on the one broken combination (open module, pre-Turing), installs `nvidia-vaapi-driver`, and writes a `modeset=1` drop-in only when nothing else sets one; AMD is VA-API-only; session env goes to `~/.config/uwsm/env.d/50-omocachy-gpu`, never `~/.config/uwsm/env`; all honour `--dry-run` |
+| GPU dispatch | `bin/gpu-detect.sh` → `gpu-setup.sh` → `nvidia.sh`/`amd-rocm.sh` | Working; NVIDIA probes the PCI id for the generation and warns on the one broken combination (open module, pre-Turing), installs `libva-nvidia-driver`, and writes a `modeset=1` drop-in only when nothing else sets one; AMD is VA-API-only; session env goes to `~/.config/uwsm/env.d/50-omocachy-gpu`, never `~/.config/uwsm/env`; all honour `--dry-run` |
 
 ## Version policy
 
