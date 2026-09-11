@@ -71,50 +71,11 @@ decide() {
     [[ -z $DECISIONS_FILE ]] || printf '%s=%s\n' "$1" "$2" >>"$DECISIONS_FILE"
 }
 
-# ---------------------------------------------------------------------------
-# The dry-run contract: every state-changing command flows through one of
-# these helpers. In --dry-run mode they print the command (and, for file
-# writes, the full content) instead of running it, so review can enforce "no
-# sudo outside run_root/write_root_file/append_root_file" with a single grep
-# and "no state changes in --dry-run" by inspection of this file.
-# ---------------------------------------------------------------------------
-run() {
-    if $DRY_RUN; then
-        echo "DRYRUN: $*"
-    else
-        "$@"
-    fi
-}
-
-run_root() {
-    if $DRY_RUN; then
-        echo "DRYRUN: sudo $*"
-    else
-        sudo "$@"
-    fi
-}
-
-# Write stdin as the contents of privileged file $1 via sudo tee. Dry-run
-# prints the content indented so the plan shows exactly what would land.
-write_root_file() {
-    local dest="$1"
-    if $DRY_RUN; then
-        echo "DRYRUN: write $dest:"
-        sed 's/^/    | /'
-    else
-        sudo tee "$dest" >/dev/null
-    fi
-}
-
-append_root_file() {
-    local dest="$1"
-    if $DRY_RUN; then
-        echo "DRYRUN: append to $dest:"
-        sed 's/^/    | /'
-    else
-        sudo tee -a "$dest" >/dev/null
-    fi
-}
+# run / run_root / write_root_file / append_root_file and the dry-run
+# contract they implement live in bin/lib/common.sh, shared with the
+# profile migration scripts.
+# shellcheck source=bin/lib/common.sh
+source "$SCRIPT_DIR/lib/common.sh"
 
 usage() {
     cat <<USAGE
@@ -312,10 +273,7 @@ fi
 if ! $IS_CACHYOS && ! $VERIFY_ONLY; then
     echo "Warning: this does not look like a CachyOS system (no /etc/cachyos-release and no [cachyos*] repo in /etc/pacman.conf)."
     echo "This script's reconciliation logic (pacman.conf/mirrorlist restore, boot hook handling) assumes CachyOS."
-    if ! $ASSUME_YES; then
-        read -r -p "Continue anyway? [y/N] " reply
-        [[ $reply =~ ^[Yy]$ ]] || { echo "Aborting."; exit 1; }
-    fi
+    confirm "Continue anyway?" || { echo "Aborting."; exit 1; }
 fi
 
 REAPPLY=false
@@ -944,10 +902,7 @@ else
 fi
 echo ""
 
-if ! $ASSUME_YES && ! $DRY_RUN; then
-    read -r -p "Proceed? [y/N] " reply
-    [[ $reply =~ ^[Yy]$ ]] || { echo "Aborting."; exit 1; }
-fi
+confirm "Proceed?" || { echo "Aborting."; exit 1; }
 
 # ---------------------------------------------------------------------------
 # Repo + keyring
