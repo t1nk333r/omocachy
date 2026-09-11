@@ -288,8 +288,19 @@ systemd initramfs).
    stack's entry for this repository is still named `runner-omarchy`; rename it
    to `omocachy` there if the self-hosted path is ever wanted back (the workflow
    would need `runs-on: [self-hosted, linux, docker]`). First runs exposed that
-   the suite was only *apparently* hermetic — it needed a host `pacman` — which
-   is being fixed in the test harness; the gate is a green run on push.
+   the suite was only *apparently* hermetic, and fixing that closed three real
+   gaps: the fixture harness had no `pacman`, so a runner without it failed 140
+   matrix assertions at the wrapper's preflight (`4b367fb`); `.gitignore`'s
+   unanchored `omarchy/` rule was hiding two fixture files under
+   `tests/fixtures/*/usr/share/omarchy/`, which made `base_packages` and
+   `snapper_reapply` decide differently on a fresh checkout than on the
+   maintainer's host (`2849c80`); and the profile and picker sections called the
+   host `pacman` directly, so manifest/rollback/probe died on "missing required
+   command(s): pacman" and the picker enumerated nothing (`7c8ca91`).
+   The suite now passes **304 / 0** in an `ubuntu:24.04` container with no Arch
+   tooling, again under `--network none` with a tree rebuilt from `git ls-files`
+   (proving it needs nothing untracked and no network), and **304 / 0** on the
+   Arch host. **CI is green on push** (run `34643893131`, 51 s).
 7. Backlog: opt-in debloat prompt inside the wrapper;
    `--restore-host-specific`; lab hardening (fixed 90 s wait, typed launch
    line) and merging the lab's `cachyos-guest` branch.
