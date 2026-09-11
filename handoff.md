@@ -136,6 +136,24 @@ systemd initramfs).
   on `/boot` that this script's own assertion then failed on (plan 040).
   Final state: a full run exits 0 with **19 PASS / 0 FAIL**, and so does
   `--verify-only` after a real reboot, with `rd.luks.uuid=` in the cmdline.
+- **Limine + LUKS2, re-run against current HEAD** (2026-09-11, the v4 guest):
+  gate 1's "the plan-017 fixes have not been re-run on a guest" is now closed,
+  and the re-run found two more defects, both fixed: the closure shipped
+  `[extra]`'s `mise`, which **conflicts** with `[omarchy]`'s `mise-bin` that
+  Omarchy installs (plan 042), and `/etc/default/limine` assigning
+  `KERNEL_CMDLINE[default]` silently replaced Omarchy's appended arguments, so
+  the regenerated entries lost `initramfs_async=0` and the assertion suite
+  failed the install (plan 041). The wrapper now appends exactly Omarchy's
+  arguments to the assignment (backed up, idempotent). Evidence: a full run
+  exits 0 with **19 PASS / 0 FAIL** — including
+  *"/etc/default/limine carries the ENABLE_UKI/BOOT_ORDER/TARGET_OS_NAME
+  overrides on a Limine host"* and *"the generated Limine entries keep
+  omarchy-settings' initramfs_async=0 on a LUKS host"* — the entry's cmdline ends
+  `… splash loglevel=0 systemd.show_status=false rd.udev.log_level=0
+  vt.global_cursor_default=0 initramfs_async=0`, the boot's LUKS prompt is the
+  themed Omarchy/Plymouth one (`run/shots/limine-luks-themed.png`, not the raw
+  text prompt the regression produced), and `--verify-only` after that reboot is
+  **19 PASS / 0 FAIL**.
 - **`bin/debloat-quattro.sh`, driven interactively** (2026-09-11, the Omarchy 4
   guest): the picker ran on the desktop — one package removed through
   `omarchy-pkg-drop` (pacman transaction + snapper snapshots), one web app
@@ -158,9 +176,10 @@ systemd initramfs).
    `chromium`), the ufw ssh allowance and the `/etc/environment` `OMARCHY_PATH`
    write all assert PASS in the same run, and the shadow `HookDir` override was
    exercised inside a live pacman transaction (`pacman -Qkk
-   limine-mkinitcpio-hook` stays clean). Still fixture-only: an initramfs
-   rebuild triggered by a kernel upgrade, `limine-snapper-sync` accepting
-   `TARGET_OS_NAME="CachyOS"`, and a `--skip-user-configs` run on a fresh guest.
+   limine-mkinitcpio-hook` stays clean). Re-run on the Limine guest too (see
+   §Where validation stands) — the `TARGET_OS_NAME`/`limine-snapper-sync` item
+   below is now exercised. Still fixture-only: an initramfs rebuild triggered by
+   a kernel upgrade, and a `--skip-user-configs` run on a fresh guest.
 2. **systemd-boot CachyOS machine** — run for real on 2026-09-11 on a guest
    converted from GRUB: detection, the hook policy, the initramfs rebuild, the
    post-install assertion suite (19 PASS / 0 FAIL) and `--verify-only` after a
