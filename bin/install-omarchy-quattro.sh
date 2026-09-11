@@ -1311,9 +1311,61 @@ if [[ $BOOTLOADER == "limine" ]]; then
     # line is exactly the class of change that does not get a second try.
     if grep -qE '^\s*KERNEL_CMDLINE\[[^]]*\]\s*=' "$(host_path "$LIMINE_DEFAULT")" 2>/dev/null; then
         echo "Warning: $LIMINE_DEFAULT assigns KERNEL_CMDLINE with '=', and it loads after omarchy-settings' drop-in, which uses '+='." >&2
-        echo "         Omarchy's own arguments (quiet splash loglevel=0 ... initramfs_async=0) will be dropped from regenerated entries." >&2
-        echo "         Change that line to '+=' or add those arguments yourself; initramfs_async=0 is what keeps the LUKS prompt themed." >&2
-        decide limine_cmdline_style "assign-overrides-omarchy"
+        echo "         Omarchy's own arguments would be dropped from regenerated entries; initramfs_async=0 is what keeps the LUKS prompt themed." >&2
+
+        # Re-added rather than rewritten: nothing the machine was installed with
+        # is removed, the parameters Omarchy's drop-in appends are appended to
+        # each assignment that lacks them, the file is backed up first, and the
+        # step is idempotent (a second run finds nothing missing).
+        shopt -s nullglob
+        LIMINE_DROPIN_FILES=("$(host_path /etc/limine-entry-tool.d)"/*.conf)
+        shopt -u nullglob
+        LIMINE_ADDED_KEYS=""
+        if ((${#LIMINE_DROPIN_FILES[@]})); then
+            LIMINE_ADDED_KEYS="$(awk -F'"' '
+                /^[[:space:]]*KERNEL_CMDLINE\[[^]]*\][[:space:]]*\+=[[:space:]]*"/ {
+                    key = $0
+                    sub(/^[[:space:]]*KERNEL_CMDLINE\[/, "", key)
+                    sub(/\].*$/, "", key)
+                    print key "\t" $2
+                }' "${LIMINE_DROPIN_FILES[@]}")"
+        fi
+        LIMINE_ORIG="$(cat "$(host_path "$LIMINE_DEFAULT")")"
+        LIMINE_DEFAULT_NEW="$(
+            awk -v ADDED="$LIMINE_ADDED_KEYS" '
+                BEGIN {
+                    n = split(ADDED, rows, "\n")
+                    for (i = 1; i <= n; i++) {
+                        split(rows[i], f, "\t")
+                        if (f[1] != "") add[f[1]] = add[f[1]] " " f[2]
+                    }
+                }
+                /^[[:space:]]*KERNEL_CMDLINE\[[^]]*\][[:space:]]*=[[:space:]]*"[^"]*"[[:space:]]*$/ {
+                    key = $0
+                    sub(/^[[:space:]]*KERNEL_CMDLINE\[/, "", key)
+                    sub(/\].*$/, "", key)
+                    line = $0
+                    ntok = split(add["default"] " " add[key], t, /[[:space:]]+/)
+                    for (i = 1; i <= ntok; i++) {
+                        if (t[i] != "" && index(line, t[i]) == 0) sub(/"[[:space:]]*$/, " " t[i] "\"", line)
+                    }
+                    print line
+                    next
+                }
+                { print }' "$(host_path "$LIMINE_DEFAULT")")"
+        if [[ -n $(printf '%s' "$LIMINE_ADDED_KEYS" | tr -d '[:space:]') && $LIMINE_DEFAULT_NEW != "$LIMINE_ORIG" ]]; then
+            if $DRY_RUN; then
+                echo "DRYRUN: append Omarchy's kernel arguments to the KERNEL_CMDLINE assignments in $LIMINE_DEFAULT"
+            else
+                run_root cp -a "$LIMINE_DEFAULT" "$LIMINE_DEFAULT.$BACKUP_SUFFIX"
+                printf '%s\n' "$LIMINE_DEFAULT_NEW" | write_root_file "$LIMINE_DEFAULT"
+                echo "Appended Omarchy's kernel arguments to $LIMINE_DEFAULT (original kept at $LIMINE_DEFAULT.$BACKUP_SUFFIX)."
+            fi
+            decide limine_cmdline_style "assign-params-appended"
+        else
+            echo "         No Omarchy drop-in arguments found to append; change that line to '+=' yourself." >&2
+            decide limine_cmdline_style "assign-overrides-omarchy"
+        fi
     elif grep -qE '^\s*KERNEL_CMDLINE\[[^]]*\]\s*\+=' "$(host_path "$LIMINE_DEFAULT")" 2>/dev/null; then
         decide limine_cmdline_style "append"
     else
