@@ -1,0 +1,42 @@
+name: omocachy
+
+on:
+  push:
+    branches: [main, omocachy]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  lint:
+    # GitHub-hosted, deliberately: no self-hosted runner is registered for this
+    # repository (the maintainer's runner stack is registered for the d7eeem/*
+    # mirrors), and the GitHub Ubuntu image ships shellcheck. Swap this to
+    # [self-hosted, linux, docker] if a runner is ever registered here.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tool versions
+        run: |
+          bash --version | head -1
+          shellcheck --version | sed -n '1,3p'
+
+      # Mirrors the local gate in README §9 and plan 034: every entry point and
+      # helper parses, then shellcheck at warning severity with -x so the
+      # sourced bin/lib/*.sh helpers are followed.
+      - name: Bash syntax check
+        run: |
+          set -e
+          for f in bin/*.sh bin/lib/*.sh tests/run.sh; do
+            bash -n "$f"
+            echo "OK: $f"
+          done
+
+      - name: ShellCheck
+        run: shellcheck --severity=warning -x bin/*.sh bin/lib/*.sh tests/run.sh
+
+      # Fixture matrix, HOOKS merge, dry-run purity and the rest. Read-only:
+      # the installer only ever runs under --dry-run against tests/fixtures/*
+      # sysroots.
+      - name: Test suite
+        run: tests/run.sh
