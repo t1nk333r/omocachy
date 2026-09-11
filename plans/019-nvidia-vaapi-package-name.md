@@ -120,7 +120,8 @@ if ! $SUPPORTS_OPEN_GSP && pacman -Qq | grep -qE '^nvidia-open|^linux-.*-nvidia-
 (The comment at `:61-69` already documents both packaging forms; this makes the
 check agree with it.)
 
-**Verify**: `grep -n 'linux-.*-nvidia-open' bin/nvidia.sh` → one match.
+**Verify**: `grep -n 'linux-.*-nvidia-open' bin/nvidia.sh` → two matches: the
+new probe at `:74` and the pre-existing comment at `:66`.
 
 ### Step 3: Warn with a profile that exists
 
@@ -164,7 +165,8 @@ comment at `:61-69`); do not invent profile names beyond the set recorded in
 
 ## Done criteria
 
-- [ ] `grep -rn 'nvidia-vaapi-driver' . --exclude-dir=.git` returns nothing
+- [ ] `grep -rn 'nvidia-vaapi-driver' bin/ handoff.md README.md` returns
+      nothing (this plan file quotes the wrong name by design)
 - [ ] `grep -n 'libva-nvidia-driver' bin/nvidia.sh` returns the install line
 - [ ] `grep -n 'linux-.*-nvidia-open' bin/nvidia.sh` returns the probe
 - [ ] Lint gate exits 0; `tests/run.sh` ends `0 failed`
