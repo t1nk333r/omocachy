@@ -76,7 +76,7 @@ reconciles everything in that process that would otherwise clobber CachyOS
 state.
 
 ```bash
-git clone https://github.com/d7eeem/omocachy.git
+git clone https://github.com/t1nk333r/omacachy.git
 cd omacachy
 bin/install-omarchy-quattro.sh --dry-run   # review the exact plan first
 bin/install-omarchy-quattro.sh             # then run it for real
