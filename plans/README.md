@@ -9,10 +9,11 @@ version-selection `fetch-omarchy.sh`, and the network/walker patches). Plans
 checks before executing; their content remains directionally valid but line
 numbers and some README references have moved.
 
-**Branch note for executors**: plans 001–014 describe the v3 line, now
-isolated on branch `v3`; their `fetch-omarchy.sh` / `patch_or_die` /
-`TESTED_OMARCHY_REF` dependency notes are historical — none of those files
-exist on `main`.
+**Branch note for executors**: plans 001–014 describe the v3 line, which was
+dropped on 2026-09-12 (tip `f32b850`, restorable from the
+`omocachy-v3-legacy.bundle` recorded in `handoff.md`); their
+`fetch-omarchy.sh` / `patch_or_die` / `TESTED_OMARCHY_REF` dependency notes are
+historical — none of those files exist on `main`.
 
 Repo context for executors (2026-09-11): nine shell entry points plus
 `bin/lib/{common,profile,hooks-merge}.sh`, ~5.4K lines under `bin/`, and
