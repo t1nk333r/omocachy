@@ -221,6 +221,24 @@ systemd initramfs).
   `~/Work/omacachy-station-bundle/omacachy-profile-luna-20260911-233651.tar.zst`
   plus its `.sha256`; the older `~/Work/omocachy-station-bundle/` archives are
   superseded and can be removed once the station is built.
+- **Kernel version transitions and the SigLevel question** (2026-09-11/12, private
+  lab copies — the shared `~/Work/t1nk33r-lab` was in use by another agent and
+  was left untouched): a **real kernel version change on a Limine machine**
+  (7.2.3-1 → 7.1.8-1 → 7.2.4-1, packages staged from live signed mirrors since
+  nothing older was cached and `archive.cachyos.org`/`mirror.cachyos.org` only
+  serve a placeholder page) regenerated the `/boot/limine.conf` entry each time
+  with new pinned `#hash` values that matched `b2sum` of the ESP copies exactly,
+  and the machine booted to a logged-in Omarchy desktop after both — the last
+  routine-path unknown, now closed. (The pins are BLAKE2b-512 of the ESP kernel
+  and initramfs copies; comparing them is the cheap integrity check.) The
+  second question — whether the lab seed's
+  `SigLevel = PackageRequired DatabaseNever` for `[cachyos]` masks a CachyOS or
+  mirror bug — is answered **(a): no bug, no report warranted**. Today the
+  database signature verifies with the ISO-era keyring, all eight mirrors serve
+  an identical valid db+sig, and the clock is NTP-synced; the one recorded
+  failure (2026-09-07T19:35Z) was a mirror mid-sync race that passed a minute
+  later. Recommendation for the lab repo (not this one): drop `lab:285`, since
+  it weakens the DB signature check for every guest.
 - **Profile migration hardened** (2026-09-11, plan 044). The import was validated
   against the real luna bundle in a lab guest and the run exposed a blocking
   bug: `omacachy-profile-import.sh` aborted under `set -e`/`pipefail` when
@@ -267,7 +285,11 @@ systemd initramfs).
    `/etc/pacman.d/hooks-omacachy/90-mkinitcpio-install.hook` and *skipping* both
    same-named hooks, the initramfs mtime moved, no Limine artefacts), and
    `--skip-user-configs` on a **fresh** GRUB guest (four named steps skipped,
-   `$HOME` untouched, transcript in `/tmp`, still 19 PASS / 0 FAIL).
+   `$HOME` untouched, transcript in `/tmp`, still 19 PASS / 0 FAIL). A *real
+   kernel version change* on a Limine machine has since been exercised too
+   (7.2.3-1 → 7.1.8-1 → 7.2.4-1 from live signed mirrors): each transition
+   regenerated `/boot/limine.conf`'s entry with new pinned `#hash` values that
+   matched `b2sum` of the ESP copies, and the machine booted each time.
 2. **systemd-boot CachyOS machine** — run for real on 2026-09-11 on a guest
    converted from GRUB: detection, the hook policy, the initramfs rebuild, the
    post-install assertion suite (19 PASS / 0 FAIL) and `--verify-only` after a
