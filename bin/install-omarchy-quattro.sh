@@ -949,9 +949,12 @@ confirm "Proceed?" || { echo "Aborting."; exit 1; }
 # undo this machine can have is a snapshot taken here. Only on a first run — a
 # re-apply already has one, and snapshotting again only consumes space — and
 # only when snapper is configured for /: `snapper create` needs the config, and
-# CachyOS pre-creates /.snapshots, so `create-config` cannot be used to make one
-# on the fly. A failure here never blocks the install; the snapshot is a safety
-# net, not a prerequisite. `important=yes` keeps cleanup from deleting it.
+# `create-config` can only make one while /.snapshots does not exist yet — true
+# on a fresh CachyOS, false on any machine where snapper has been configured
+# before (that is what creates the subvolume), which is exactly the re-apply
+# case plan 040 already works around. A failure here never blocks the install;
+# the snapshot is a safety net, not a prerequisite. `important=yes` keeps
+# cleanup from deleting it.
 # ---------------------------------------------------------------------------
 
 step "Rollback point (snapper)"

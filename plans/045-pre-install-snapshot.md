@@ -34,8 +34,10 @@ script take a snapper snapshot").
   - **Only on a first run**: a re-apply already has one, and re-snapshotting
     consumes space for nothing.
   - **Only when snapper is configured for `/`**: `snapper create` needs the
-    config, and CachyOS pre-creates `/.snapshots`, so `create-config` cannot be
-    used as a fallback. Absent config → a printed skip, not a failure.
+    config, and `create-config` can only make one while `/.snapshots` does not
+    exist yet — true on a fresh CachyOS, false once snapper has ever been
+    configured (that step creates the subvolume). Absent config → a printed
+    skip, not a failure.
   - **Never fatal**: a failure warns, explains that there is then no rollback
     point, and continues.
   - Dry run prints the exact command. Decision: `snapper_snapshot` =
@@ -52,19 +54,33 @@ script take a snapper snapshot").
 - Dry run against the configured fixture prints
   `DRYRUN: sudo snapper --no-dbus -c root create …` and records
   `snapper_snapshot=would-create`.
-- Lab (private copy, pristine guest with snapper configured): the first run
-  takes a real numbered snapshot (`snapper -c root list`) and stays at
-  `wrapper-exit=0` / 19 PASS; a second run skips it
-  (`Re-apply: no pre-install snapshot`) and creates no second snapshot.
+- Lab (private copy `t1nk33r-lab-snap`, pristine golden, snapper configured with
+  `snapper --no-dbus -c root create-config /` there — the golden has no
+  `/.snapshots` yet, so that succeeds):
+  - first run printed `Took snapper snapshot 1 of / (important=yes,
+    cleanup=number) as the pre-install rollback point.`, `snapper -c root list`
+    then showed `1 | Sat Sep 12 16:48:35 2026 | before omacachy install |
+    important=yes`, its `info.xml` carried `<cleanup>number</cleanup>` and
+    `<key>important</key><value>yes</value>`, and the run stayed at
+    `wrapper-exit=0` / 19 PASS with the snapper-config assertion still passing;
+  - a second run printed `Re-apply: no pre-install snapshot (the first run took
+    one).` and the snapshot list was unchanged (no second snapshot);
+  - reproduced on a second fresh golden: identical step output and a snapshot
+    with the same description/userdata.
+  - The step's own note that "CachyOS pre-creates `/.snapshots`" was wrong and
+    is corrected above: the subvolume appears when snapper is first configured,
+    not from the installer.
 
 ## Considered and rejected
 
 - **Snapshot on every run**: the user asked for the first fire, and repeated
   snapshots on re-applies cost space for a state that is already covered.
-- **`snapper create-config` fallback when no config exists**: fails on CachyOS
-  because `/.snapshots` already exists (the same failure plan 040's pre-empt
-  works around); a skip with a clear message is honest, and the pre-empt still
-  leaves the system with a template config afterwards.
+- **`create-config` fallback when no config exists**: on a true first run
+  `/.snapshots` usually does not exist yet, so the wrapper *could* configure
+  snapper on the fly — rejected anyway, because silently choosing a retention
+  policy for someone's root filesystem is a system decision that belongs to the
+  installer or the user. Plan 040's pre-empt still leaves a template config
+  whenever the snapper stage needs one.
 - **Making it fatal**: a snapshot is a safety net, not a prerequisite; aborting
   an otherwise-fine install because snapper misbehaved would be worse than
   proceeding without it.

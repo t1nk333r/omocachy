@@ -286,8 +286,9 @@ cheap, so before anything is written the wrapper takes one:
 keeps automatic cleanup from deleting it — and prints the snapshot number. It
 fires only on a first run (a re-apply already has one) and only when
 `/etc/snapper/configs/root` exists, because `snapper create` needs a configured
-root and CachyOS pre-creates `/.snapshots`, so `create-config` cannot be used to
-make one on the fly. A failure here warns and continues: the install never
+root — and `create-config` can only make one while `/.snapshots` does not exist
+yet, which is true on a fresh CachyOS but false on any machine where snapper has
+been configured before. A failure here warns and continues: the install never
 depends on the snapshot.
 
 **ssh survives the install.** Omarchy's `install/config/firewall.sh` sets
