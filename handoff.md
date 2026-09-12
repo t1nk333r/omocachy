@@ -24,8 +24,12 @@ new machine:
 ## Version policy
 
 `main` supports Omarchy 4 only. The complete legacy Omarchy 3 implementation
-is preserved on the local `v3` branch, created at `f32b850`; keep any legacy
-maintenance isolated there and do not reintroduce those scripts to `main`.
+lived on the `v3` branch, tip `f32b850` — **dropped 2026-09-12** at the
+maintainer's request. It is not gone: a complete-history `git bundle` was taken
+first (`~/Work/omocachy-v3-legacy.bundle`, 27 MB, verified with
+`git bundle verify`), so the line can be restored with
+`git fetch <bundle> v3:v3` and pushed if it is ever wanted again. Keep any
+future legacy maintenance isolated the same way rather than in `main`.
 
 ## How this got here (compressed history, 2026-08-17 → 08-19)
 
