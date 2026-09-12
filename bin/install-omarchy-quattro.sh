@@ -1943,8 +1943,17 @@ if [[ $BOOTLOADER != "limine" ]]; then
     if ((${#LIMINE_ARTIFACTS[@]})); then
         for artifact in "${LIMINE_ARTIFACTS[@]}"; do
             if $DRY_RUN; then
-                echo "DRYRUN: move $artifact to $artifact.$BACKUP_SUFFIX"
+                echo "DRYRUN: move $artifact to $artifact.$BACKUP_SUFFIX (replacing any older backup of it)"
             else
+                # Omarchy's seeding tools re-create these artefacts on every run
+                # — the Limine UKI alone is ~44 MB — so keep only the newest
+                # backup of each; otherwise a small ESP fills up after a few
+                # re-applies (observed on the station rehearsal guest).
+                shopt -s nullglob
+                for old in "$artifact".omarchy-quattro-backup-*; do
+                    run_root rm -f "$old"
+                done
+                shopt -u nullglob
                 run_root mv "$artifact" "$artifact.$BACKUP_SUFFIX"
                 echo "Moved $artifact aside: Limine does not boot this $BOOTLOADER machine."
             fi

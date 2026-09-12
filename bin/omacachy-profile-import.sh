@@ -265,6 +265,22 @@ stage_configs() {
             hyprctl reload >/dev/null 2>&1 && echo "    reloaded the running Hyprland"
         fi
     fi
+    # A bundle exported before the 2026-09-11 rename carries the old env file
+    # name. uwsm sources every env.d entry, so a stale copy would keep exporting
+    # the same variables alongside the new one. Rename it when the new name is
+    # absent; when both exist, say so instead of deleting anything — this tool
+    # merges and never deletes.
+    local legacy_gpu="$HOME/.config/uwsm/env.d/50-omocachy-gpu"
+    local current_gpu="$HOME/.config/uwsm/env.d/50-omacachy-gpu"
+    if [[ -e $legacy_gpu ]]; then
+        if [[ -e $current_gpu ]]; then
+            warn "$(basename "$legacy_gpu") came back from the bundle and $(basename "$current_gpu") already exists; review and remove the stale one."
+        else
+            mv "$legacy_gpu" "$current_gpu"
+            echo "    renamed the pre-rename $(basename "$legacy_gpu") to $(basename "$current_gpu")"
+        fi
+    fi
+
     record_stage configs OK
 }
 
