@@ -239,6 +239,28 @@ systemd initramfs).
   failure (2026-09-07T19:35Z) was a mirror mid-sync race that passed a minute
   later. Recommendation for the lab repo (not this one): drop `lab:285`, since
   it weakens the DB signature check for every guest.
+- **Station rehearsal** (2026-09-11, private lab copy — the shared lab was in use
+  by another agent throughout). The documented four-step procedure ran end to
+  end on a pristine guest with the post-rename code and the new bundle: install
+  (`wrapper-exit=0`, 19 PASS / 0 FAIL), reboot to a working Omarchy desktop
+  (greeter — Omarchy's SDDM config replaces the lab's autologin drop-in, which
+  is the documented login model), bundle import (`sha256sum -c` OK, exit 0, all
+  five stages in one pass, no retries, `packages-failed.txt` **absent** — eleven
+  printed policy skips only), then `omacachy-doctor.sh --bundle` **0 failed** and
+  `--verify-only` 19/0. Four findings: the README clone block was a false alarm
+  (`clone …/omacachy.git` then `cd omacachy` is correct); a bundle exported
+  before the rename restores `50-omocachy-gpu` and nothing migrated it — the
+  importer now renames it (and warns instead of deleting when both names exist),
+  verified on the guest; the suite PASS that runs no comparison is the
+  already-documented snapper case, nothing new (the agent that reported it
+  corrected itself); and the Limine artefacts Omarchy's seeding re-creates on
+  every run (a ~44 MB UKI plus two `limine.conf` files) used to accumulate one
+  renamed backup per run on a non-Limine machine — the move-aside now prunes
+  older backups, verified (two siblings → one, `wrapper-exit=0`, 19/0). Root
+  cause of the re-creation, for the record: `omarchy-reinstall-configs` →
+  `omarchy-refresh-plymouth` → `omarchy-plymouth-set` ends in `limine-mkinitcpio`
+  whenever that command exists; shadowing it the way `omarchy-refresh-limine` is
+  shadowed would prevent creation outright, if that is ever wanted.
 - **Profile migration hardened** (2026-09-11, plan 044). The import was validated
   against the real luna bundle in a lab guest and the run exposed a blocking
   bug: `omacachy-profile-import.sh` aborted under `set -e`/`pipefail` when
