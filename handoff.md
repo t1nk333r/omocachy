@@ -8,7 +8,7 @@ the map between them.
 ## What this repo is now
 
 A standalone project (fork of `mroboff/omarchy-on-cachyos`, **not**
-PR-bound — clone URLs point at `d7eeem/omocachy`; `FUNDING.yml` deliberately still
+PR-bound — clone URLs point at `t1nk333r/omacachy`; `FUNDING.yml` deliberately still
 credits the original author). It installs Omarchy 4 on CachyOS with a
 per-item debloater, and carries an existing Omarchy desktop profile onto the
 new machine:
@@ -89,7 +89,7 @@ maintenance isolated there and do not reintroduce those scripts to `main`.
 root-equivalent; secrets in `.env`, unrecoverable, never commit or print):
 
 - 3 ephemeral GitHub Actions runners (`d7eeem/feather`,
-  `d7eeem/omocachy`, `d7eeem/garage-webui-ng`). Note: this repo's
+  `t1nk333r/omacachy`, `d7eeem/garage-webui-ng`). Note: this repo's
   Actions workflow was **removed** in favor of Jenkins, so `runner-omarchy`
   currently serves nothing — keep or retire deliberately.
 - 1 Jenkins inbound agent (`docker-host` → `http://10.10.10.62:8080`,
@@ -207,7 +207,7 @@ systemd initramfs).
   `/etc/pacman.d/hooks-omacachy/`, `~/.config/uwsm/env.d/50-omacachy-gpu`), the
   `OMACACHY_*` test seams, the workflow's `name:`, and every reference in the
   docs and plans. The GitHub repositories keep their names by decision
-  (`d7eeem/omocachy`, `t1nk333r/omocachy`), so clone URLs are unchanged. A
+  (`t1nk333r/omacachy`, `t1nk333r/omacachy`), so clone URLs are unchanged. A
   pre-rename machine migrates on its next wrapper run — verified in a lab on a
   guest installed by the old code: one re-run removed the legacy `HookDir` line
   and directory, `/etc/pacman.conf` line 11 now names the new directory (four
