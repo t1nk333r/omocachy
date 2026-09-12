@@ -941,6 +941,42 @@ confirm "Proceed?" || { echo "Aborting."; exit 1; }
 # Repo + keyring
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Rollback point
+#
+# The first run changes pacman.conf, the keyring, the boot hooks, mkinitcpio
+# HOOKS, /etc/os-release and more before any apply stage runs, so the cheapest
+# undo this machine can have is a snapshot taken here. Only on a first run — a
+# re-apply already has one, and snapshotting again only consumes space — and
+# only when snapper is configured for /: `snapper create` needs the config, and
+# CachyOS pre-creates /.snapshots, so `create-config` cannot be used to make one
+# on the fly. A failure here never blocks the install; the snapshot is a safety
+# net, not a prerequisite. `important=yes` keeps cleanup from deleting it.
+# ---------------------------------------------------------------------------
+
+step "Rollback point (snapper)"
+if $REAPPLY; then
+    echo "Re-apply: no pre-install snapshot (the first run took one)."
+    decide snapper_snapshot "skipped-reapply"
+elif [[ -f $(host_path "$SNAPPER_CONFIG") ]]; then
+    if $DRY_RUN; then
+        echo "DRYRUN: sudo snapper --no-dbus -c root create --description 'before omacachy install' --cleanup-algorithm number --userdata important=yes --print-number"
+        decide snapper_snapshot "would-create"
+    elif snapshot_number="$(run_root snapper --no-dbus -c root create \
+        --description "before omacachy install" \
+        --cleanup-algorithm number --userdata important=yes --print-number 2>&1 | tail -1)"; then
+        echo "Took snapper snapshot $snapshot_number of / (important=yes, cleanup=number) as the pre-install rollback point."
+        decide snapper_snapshot "created:$snapshot_number"
+    else
+        echo "Warning: could not take a pre-install snapper snapshot: $snapshot_number" >&2
+        echo "         Continuing — the install does not depend on it, but there is no snapshot to roll back to." >&2
+        decide snapper_snapshot "failed"
+    fi
+else
+    echo "No $SNAPPER_CONFIG: snapper is not configured for / here, so no pre-install snapshot was taken."
+    decide snapper_snapshot "skipped-no-config"
+fi
+
 step "Repo + keyring"
 
 # Bootstraps trust for the very first transaction that fetches omarchy-keyring

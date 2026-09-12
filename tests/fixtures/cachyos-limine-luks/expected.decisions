@@ -24,3 +24,4 @@ ufw_ssh=allowed:22,2222
 omarchy_path_env=written
 limine_cmdline_style=assign-params-appended
 base_packages=planned
+snapper_snapshot=skipped-no-config

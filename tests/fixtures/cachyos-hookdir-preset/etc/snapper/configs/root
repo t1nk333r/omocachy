@@ -1,0 +1,8 @@
+# Fixture copy of a configured snapper root (CachyOS ships snapper configured
+# when the installer's btrfs+snapper option is taken). Present so the wrapper's
+# pre-install snapshot decision takes its "would-create" branch in dry runs.
+SUBVOLUME="/"
+FSTYPE="btrfs"
+TIMELINE_CREATE="yes"
+TIMELINE_CLEANUP="yes"
+NUMBER_CLEANUP="yes"
